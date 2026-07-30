@@ -68,8 +68,12 @@ def test_check_invalid_shortcircuits(client) -> None:
     test_client, fake_http = client
     body = test_client.get("/api/v1/check", params={"username": "a1"}).json()
     assert body["success"] is True
-    assert body["result"]["status"] == "invalid"
-    assert body["validation"]["reason"]
+    assert body["result"]["status"] == "unknown"
+    assert body["validation"]["valid"] is True
+    assert body["validation"]["telegram_eligible"] is False
+    assert body["validation"]["fragment_eligible"] is False
+    assert body["telegram"]["checked"] is False
+    assert body["fragment"]["checked"] is False
     assert fake_http.calls == []
 
 
@@ -134,7 +138,8 @@ def test_bulk_mixed_formats_and_invalid(client) -> None:
     assert body["total"] == 4
     statuses = [r["result"]["status"] for r in body["results"]]
     assert statuses[0] == "taken"
-    assert statuses[1] == "invalid"
+    # "a1" is parseable but too short for both Telegram and Fragment → unknown
+    assert statuses[1] == "unknown"
     assert statuses[2] == "taken"
     assert statuses[3] == "taken"
 

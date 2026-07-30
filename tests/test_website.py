@@ -21,21 +21,27 @@ def test_homepage_loads(client) -> None:
     body = response.text
     # identity + required content
     assert "TG Username API" in body
-    assert "Telegram usernames." in body
+    assert "Telegram usernames" in body
     # navigation to all required destinations
-    for href in ['href="/"', 'href="/tester"', 'href="/docs"', 'href="/swagger"', 'href="/api/health"']:
+    for href in ['href="/"', 'href="/tester"', 'href="/docs"', 'href="/swagger"']:
         assert href in body
-    # feature cards + sample request + status model
+    # feature cards + status model
     assert "Fragment Intelligence" in body
-    assert "Bulk Check" in body
+    assert "Username + ID Resolution" in body
     assert "Detailed Reports" in body
-    assert "Telegram Check" in body
-    assert "/api/v1/check?username=durov" in body
+    assert "Telegram Resolution" in body
     assert "badge-unknown" in body
-    # API base URL must be filled dynamically by JS, never hardcoded to a fake domain
-    assert "data-base-url" in body
+    # API base URL shown on homepage (canonical domain)
+    assert "tg-username-api.vercel.app/api/v1" in body
     # no credentials anywhere
     assert "api_hash" not in body.lower() and "bot_token" not in body.lower()
+    # sample request uses canonical domain
+    assert "tg-username-api.vercel.app" in body
+    # mascot image referenced
+    assert "mascot.png" in body
+    # Yori Federation present, GitHub not promoted
+    assert "yorifederation" in body
+    assert "github.com/harshi79/tg-username-api" not in body
 
 
 def test_tester_loads(client) -> None:
@@ -48,8 +54,11 @@ def test_tester_loads(client) -> None:
     assert 'id="bulk-usernames"' in body
     assert 'id="bulk-counter"' in body
     assert "15" in body  # bulk maximum visible
-    assert "Check Username" in body
+    assert 'id="single-submit"' in body  # Check button
     assert "/static/tester.js" in body
+    # Resolve tab present
+    assert 'id="resolve-query"' in body
+    assert "api/v2/resolve" in body
 
 
 def test_custom_docs_loads(client) -> None:
@@ -66,7 +75,7 @@ def test_custom_docs_loads(client) -> None:
     for status in ["taken", "fragment_collectible", "available", "invalid", "unknown"]:
         assert status in body
     # all endpoints documented with example payloads
-    for path in ["/api/v1/check", "/api/v1/report", "/api/v1/check/bulk", "/api/health"]:
+    for path in ["/api/v1/check", "/api/v1/report", "/api/v1/check/bulk", "/api/v2/resolve"]:
         assert path in body
     assert "requests.get" in body  # python example
     assert "fetch(" in body  # javascript example
@@ -110,7 +119,8 @@ def test_static_assets_served(client) -> None:
 def test_footer_links_present(client) -> None:
     body = client.get("/").text
     assert "TG Username API" in body
-    assert "github.com/harshi79/tg-username-api" in body  # from repo metadata
-    assert "API status" in body
+    assert "t.me/yorifederation" in body  # Yori Federation replaces GitHub
+    assert "github.com/harshi79/tg-username-api" not in body  # no GitHub promotion
+    assert "/api/health" in body
     assert "/docs" in body
     assert "/swagger" in body

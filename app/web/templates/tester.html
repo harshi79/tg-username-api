@@ -1,115 +1,173 @@
-<section class="section" style="padding-top:38px">
-  <span class="hero-eyebrow">interactive playground</span>
+<section class="page-head-compact">
+  <span class="page-head-eyebrow">interactive playground</span>
   <h1>API Tester</h1>
-  <p class="section-lead">
-    Live requests against this deployment's API — usernames only, straight from your browser.
-    Base URL: <span class="inline-code" data-base-url>https://host/api/v1</span>
-    <button class="copy-btn" data-copy="[data-base-url]" aria-label="Copy API base URL">Copy</button>
+  <p class="page-head-sub">
+    Live requests against the production API. Base URL:
+    <span class="inline-code">https://tg-username-api.vercel.app/api/v1</span>
+    <button class="copy-btn" data-copy=".page-head-sub .inline-code" aria-label="Copy API base URL">Copy</button>
   </p>
-
-  <div class="tabs" role="tablist" aria-label="Tester modes">
-    <button type="button" class="active" data-tab="single" role="tab" aria-selected="true">Single Username</button>
-    <button type="button" data-tab="report" role="tab" aria-selected="false">Report</button>
-    <button type="button" data-tab="bulk" role="tab" aria-selected="false">Bulk</button>
-  </div>
-
-  <!-- ============================ single ============================ -->
-  <div id="panel-single" class="tab-panel active" role="tabpanel">
-    <div class="card card-primary">
-      <div class="endpoint-line">
-        <span class="endpoint-chip get">GET</span>
-        <code data-base-url-suffix="/check?username={username}">/api/v1/check?username={username}</code>
-      </div>
-      <label class="field-label" for="single-username">Username</label>
-      <div class="field-row">
-        <input id="single-username" class="input" type="text" inputmode="text" autocomplete="off"
-               spellcheck="false" placeholder="@durov, durov or https://t.me/durov"
-               aria-describedby="single-hint">
-        <button id="single-submit" class="btn btn-primary" type="button">Check Username</button>
-      </div>
-      <p class="field-hint" id="single-hint">Accepts <code class="inline-code">durov</code>,
-        <code class="inline-code">@durov</code> or <code class="inline-code">https://t.me/durov</code>.
-        Press <kbd>Enter</kbd> to submit.</p>
-    </div>
-
-    <div id="single-region" class="result-region hidden" aria-live="polite">
-      <p><span id="single-chip" class="req-chip">Idle</span></p>
-      <div id="single-result"></div>
-      <div id="single-raw" class="codeblock hidden">
-        <div class="code-label">
-          <span>raw JSON response</span>
-          <button class="copy-btn" data-copy="#single-raw-body">Copy</button>
-        </div>
-        <pre id="single-raw-body"></pre>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================ report ============================ -->
-  <div id="panel-report" class="tab-panel" role="tabpanel">
-    <div class="card card-primary">
-      <div class="endpoint-line">
-        <span class="endpoint-chip get">GET</span>
-        <code data-base-url-suffix="/report?username={username}">/api/v1/report?username={username}</code>
-      </div>
-      <label class="field-label" for="report-username">Username</label>
-      <div class="field-row">
-        <input id="report-username" class="input" type="text" autocomplete="off" spellcheck="false"
-               placeholder="durov" aria-describedby="report-hint">
-        <button id="report-submit" class="btn btn-primary" type="button">Get Report</button>
-      </div>
-      <p class="field-hint" id="report-hint">Full report: validation, Telegram, Fragment, characteristics
-        and a clearly-labelled heuristic score. Press <kbd>Enter</kbd> to submit.</p>
-    </div>
-
-    <div id="report-region" class="result-region hidden" aria-live="polite">
-      <p><span id="report-chip" class="req-chip">Idle</span></p>
-      <div id="report-result"></div>
-      <div id="report-raw" class="codeblock hidden">
-        <div class="code-label">
-          <span>raw JSON response</span>
-          <button class="copy-btn" data-copy="#report-raw-body">Copy</button>
-        </div>
-        <pre id="report-raw-body"></pre>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================ bulk ============================ -->
-  <div id="panel-bulk" class="tab-panel" role="tabpanel">
-    <div class="card card-primary">
-      <div class="endpoint-line">
-        <span class="endpoint-chip post">POST</span>
-        <code data-base-url-suffix="/check/bulk">/api/v1/check/bulk</code>
-      </div>
-      <label class="field-label" for="bulk-usernames">Usernames</label>
-      <textarea id="bulk-usernames" class="textarea" spellcheck="false"
-                placeholder="yorivex&#10;@yorixa, https://t.me/yorzen durov"
-                aria-describedby="bulk-hint"></textarea>
-      <p class="field-hint" id="bulk-hint">
-        Separate with spaces, commas or new lines.
-        <span class="count" id="bulk-counter">0 / 15 usernames</span>
-        · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to submit
-      </p>
-      <p id="bulk-over" class="notice bad hidden">
-        Bulk requests are limited to <strong>15 usernames</strong> per request — the server enforces
-        this as well. Split larger lists into multiple requests.
-      </p>
-      <button id="bulk-submit" class="btn btn-primary" type="button" disabled>Check Bulk</button>
-    </div>
-
-    <div id="bulk-region" class="result-region hidden" aria-live="polite">
-      <p><span id="bulk-chip" class="req-chip">Idle</span></p>
-      <div id="bulk-result"></div>
-      <div id="bulk-raw" class="codeblock hidden">
-        <div class="code-label">
-          <span>raw JSON response</span>
-          <button class="copy-btn" data-copy="#bulk-raw-body">Copy</button>
-        </div>
-        <pre id="bulk-raw-body"></pre>
-      </div>
-    </div>
-  </div>
 </section>
+
+<div class="tester-layout">
+  <!-- Left Panel: Input -->
+  <div class="tester-panel tester-panel-left">
+    <div class="tester-card">
+      <div class="tester-card-title">Endpoint</div>
+
+      <div class="tabs" role="tablist" aria-label="Tester modes">
+        <button type="button" class="active" data-tab="single" role="tab" aria-selected="true">Check</button>
+        <button type="button" data-tab="report" role="tab" aria-selected="false">Report</button>
+        <button type="button" data-tab="resolve" role="tab" aria-selected="false">Resolve</button>
+        <button type="button" data-tab="bulk" role="tab" aria-selected="false">Bulk</button>
+      </div>
+
+      <!-- ======================== Check ======================== -->
+      <div id="panel-single" class="tab-panel active" role="tabpanel">
+        <div class="endpoint-line">
+          <span class="endpoint-chip get">GET</span>
+          <code>/api/v1/check?username={username}</code>
+        </div>
+        <label class="field-label" for="single-username">Username</label>
+        <div class="field-row">
+          <input id="single-username" class="input" type="text" inputmode="text" autocomplete="off"
+                 spellcheck="false" placeholder="@durov, durov or https://t.me/durov"
+                 aria-describedby="single-hint">
+          <button id="single-submit" class="btn btn-primary" type="button">Check</button>
+          <button id="single-clear" class="btn btn-ghost btn-sm" type="button">Clear</button>
+        </div>
+        <p class="field-hint" id="single-hint">Accepts <code class="inline-code">durov</code>,
+          <code class="inline-code">@durov</code> or <code class="inline-code">https://t.me/durov</code>.
+          Press <kbd>Enter</kbd> to submit.</p>
+      </div>
+
+      <!-- ======================== Report ======================== -->
+      <div id="panel-report" class="tab-panel" role="tabpanel">
+        <div class="endpoint-line">
+          <span class="endpoint-chip get">GET</span>
+          <code>/api/v1/report?username={username}</code>
+        </div>
+        <label class="field-label" for="report-username">Username</label>
+        <div class="field-row">
+          <input id="report-username" class="input" type="text" autocomplete="off" spellcheck="false"
+                 placeholder="durov" aria-describedby="report-hint">
+          <button id="report-submit" class="btn btn-primary" type="button">Run</button>
+          <button id="report-clear" class="btn btn-ghost btn-sm" type="button">Clear</button>
+        </div>
+        <p class="field-hint" id="report-hint">Full report with characteristics and heuristic score.
+          Press <kbd>Enter</kbd> to submit.</p>
+      </div>
+
+      <!-- ======================== Resolve ======================== -->
+      <div id="panel-resolve" class="tab-panel" role="tabpanel">
+        <div class="endpoint-line">
+          <span class="endpoint-chip get">GET</span>
+          <code>/api/v2/resolve?query={query}</code>
+        </div>
+        <label class="field-label" for="resolve-query">Username, ID, or deep link</label>
+        <div class="field-row">
+          <input id="resolve-query" class="input" type="text" autocomplete="off" spellcheck="false"
+                 placeholder="@yori, 7728424218, or tg://openmessage?user_id=..."
+                 aria-describedby="resolve-hint">
+          <button id="resolve-submit" class="btn btn-primary" type="button">Resolve</button>
+          <button id="resolve-clear" class="btn btn-ghost btn-sm" type="button">Clear</button>
+        </div>
+        <p class="field-hint" id="resolve-hint">Accepts usernames, numeric Telegram IDs,
+          <code class="inline-code">tg://openmessage?user_id=...</code> deep links, and
+          <code class="inline-code">t.me</code> URLs. Press <kbd>Enter</kbd> to submit.</p>
+      </div>
+
+      <!-- ======================== Bulk ======================== -->
+      <div id="panel-bulk" class="tab-panel" role="tabpanel">
+        <div class="endpoint-line">
+          <span class="endpoint-chip post">POST</span>
+          <code>/api/v1/check/bulk</code>
+        </div>
+        <label class="field-label" for="bulk-usernames">Usernames</label>
+        <textarea id="bulk-usernames" class="textarea" spellcheck="false"
+                  placeholder="yorivex&#10;@yorixa, https://t.me/yorzen durov"
+                  aria-describedby="bulk-hint"></textarea>
+        <p class="field-hint" id="bulk-hint">
+          Separate with spaces, commas or new lines.
+          <span class="count" id="bulk-counter">0 / 15 usernames</span>
+          &middot; <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to submit
+        </p>
+        <p id="bulk-over" class="notice bad hidden">
+          Bulk requests limited to <strong>15 usernames</strong>.
+        </p>
+        <div class="field-row">
+          <button id="bulk-submit" class="btn btn-primary" type="button" disabled>Check Bulk</button>
+          <button id="bulk-clear" class="btn btn-ghost btn-sm" type="button">Clear</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Panel: Response -->
+  <div class="tester-panel tester-panel-right">
+    <div class="tester-card">
+      <div class="tester-card-title">Response</div>
+
+      <!-- Request state chips -->
+      <p>
+        <span id="single-chip" class="req-chip">Ready</span>
+        <span id="report-chip" class="req-chip hidden">Ready</span>
+        <span id="resolve-chip" class="req-chip hidden">Ready</span>
+        <span id="bulk-chip" class="req-chip hidden">Ready</span>
+      </p>
+
+      <!-- Check result -->
+      <div id="single-region" class="hidden" aria-live="polite">
+        <div id="single-result"></div>
+        <div id="single-raw" class="codeblock hidden">
+          <div class="codeblock-header">
+            <span>raw JSON</span>
+            <button class="copy-btn" data-copy="#single-raw-body">Copy</button>
+          </div>
+          <pre id="single-raw-body"></pre>
+        </div>
+      </div>
+
+      <!-- Report result -->
+      <div id="report-region" class="hidden" aria-live="polite">
+        <div id="report-result"></div>
+        <div id="report-raw" class="codeblock hidden">
+          <div class="codeblock-header">
+            <span>raw JSON</span>
+            <button class="copy-btn" data-copy="#report-raw-body">Copy</button>
+          </div>
+          <pre id="report-raw-body"></pre>
+        </div>
+      </div>
+
+      <!-- Resolve result -->
+      <div id="resolve-region" class="hidden" aria-live="polite">
+        <div id="resolve-result"></div>
+        <div id="resolve-raw" class="codeblock hidden">
+          <div class="codeblock-header">
+            <span>raw JSON</span>
+            <button class="copy-btn" data-copy="#resolve-raw-body">Copy</button>
+          </div>
+          <pre id="resolve-raw-body"></pre>
+        </div>
+      </div>
+
+      <!-- Bulk result -->
+      <div id="bulk-region" class="hidden" aria-live="polite">
+        <div id="bulk-result"></div>
+        <div id="bulk-raw" class="codeblock hidden">
+          <div class="codeblock-header">
+            <span>raw JSON</span>
+            <button class="copy-btn" data-copy="#bulk-raw-body">Copy</button>
+          </div>
+          <pre id="bulk-raw-body"></pre>
+        </div>
+      </div>
+
+      <div id="tester-idle" class="notice">
+        Enter a query and click <strong>Check</strong>, <strong>Run</strong>, or <strong>Resolve</strong> to see results here.
+      </div>
+    </div>
+  </div>
+</div>
 
 <script src="/static/tester.js" defer></script>

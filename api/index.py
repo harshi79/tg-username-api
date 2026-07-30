@@ -4,6 +4,9 @@ Vercel's Python runtime serves ASGI applications natively: any ``api/*.py``
 file that exposes a FastAPI/ASGI ``app`` object is mounted as a function.
 ``vercel.json`` rewrites every route to this file so the whole API
 (including ``/`` and ``/api/v1/*``) is served by the FastAPI application.
+
+Path correction for Vercel's rewritten URLs is handled inside the FastAPI
+middleware in ``app/main.py``.
 """
 
 import os

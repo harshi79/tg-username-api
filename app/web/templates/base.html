@@ -4,9 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="TG Username API — conservative public-presence intelligence for Telegram usernames: t.me resolution, Fragment collectible state, marketplace status and public prices.">
+  <meta name="description" content="TG Username API — public-presence intelligence for Telegram usernames: t.me resolution, Fragment collectible state, marketplace status and public prices. Conservative by design.">
   <title>{{ title }}</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d1112'/%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='none' stroke='%23223035'/%3E%3Ctext x='16' y='21.5' font-family='monospace' font-size='14' fill='%2314b8a6' text-anchor='middle'%3E@%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0e10'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%2310b981' stroke-width='1.5'/%3E%3Ctext x='16' y='21' font-family='monospace' font-size='14' fill='%2310b981' text-anchor='middle'%3E@%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/site.css">
 </head>
 <body>
@@ -18,30 +21,72 @@
         <span class="brand-mark">@</span>
         <span class="brand-text">TG&nbsp;Username&nbsp;API</span>
       </a>
-      <nav class="nav" aria-label="Primary">
+
+      <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+
+      <nav class="nav" id="main-nav" aria-label="Primary">
         <a href="/"{{ active_home }}>Home</a>
-        <a href="/tester"{{ active_tester }}>API Tester</a>
-        <a href="/docs"{{ active_docs }}>Documentation</a>
-        <a href="/swagger"{{ active_openapi }}>OpenAPI</a>
-        <a href="/api/health"{{ active_health }}>Health</a>
+        <a href="/tester"{{ active_tester }}>Tester</a>
+        <a href="/docs"{{ active_docs }}>Docs</a>
+        <a href="/swagger"{{ active_openapi }}>API</a>
       </nav>
+
+      <div class="nav-right" id="nav-right">
+        <a href="https://t.me/yorifederation" class="nav-yori" rel="noopener noreferrer" target="_blank" aria-label="Yori Federation on Telegram">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.198 2.433a2.242 2.242 0 0 0-1.022.215l-17.5 7.5a2.226 2.226 0 0 0 .375 4.205l4.52 1.41 2.49 6.827a2.191 2.191 0 0 0 1.318 1.322 2.168 2.168 0 0 0 .655.093 2.214 2.214 0 0 0 1.612-.73l3.212-3.666 4.747 3.502a2.205 2.205 0 0 0 1.28.424 2.19 2.19 0 0 0 .978-.226 2.234 2.234 0 0 0 1.288-1.606l3-15.5a2.248 2.248 0 0 0-.74-2.21 2.197 2.197 0 0 0-1.243-.564zm.206 2.067-3 15.5a.728.728 0 0 1-.42.524.7.7 0 0 1-.642-.019l-5.253-3.876-3.874 4.42a.3.3 0 0 1-.284.104.33.33 0 0 1-.229-.196l-2.72-7.455 6.894-2.82a.75.75 0 0 0-.602-1.374L4.43 9.72l15.5-6.643a.74.74 0 0 1 .708.05.733.733 0 0 1 .34.524.087.087 0 0 1 .004.014 1.318 1.318 0 0 1 .015.108c.0003.027.004.053.006.08z"/></svg>
+          <span>Yori Federation</span>
+        </a>
+        <span class="status-indicator" title="API Status">
+          <span class="status-dot" data-health-dot aria-hidden="true"></span>
+          <span data-health-label>Checking</span>
+        </span>
+      </div>
     </div>
   </header>
 
-  <main id="main" class="container">
+  <main id="main">
     {{ content }}
   </main>
 
   <footer class="site-footer">
-    <div class="container footer-inner">
-      <span class="footer-name">TG Username API</span>
-      <nav class="footer-links" aria-label="Footer">
-        <a href="https://github.com/harshi79/tg-username-api" rel="noopener noreferrer" target="_blank">GitHub</a>
-        <a href="/docs">Docs</a>
-        <a href="/swagger">OpenAPI</a>
-        <a href="/api/health" class="footer-status"><span class="status-dot" data-health-dot aria-hidden="true"></span>API status</a>
-      </nav>
-      <span class="footer-note">Public data only. Conservative by design.</span>
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand">TG Username API</div>
+          <p class="footer-desc">Public-presence intelligence for Telegram usernames. Conservative by design — never fabricates availability.</p>
+        </div>
+        <div>
+          <div class="footer-col-title">Product</div>
+          <nav class="footer-links" aria-label="Footer product links">
+            <a href="/">Home</a>
+            <a href="/tester">API Tester</a>
+            <a href="/docs">Documentation</a>
+            <a href="/swagger">OpenAPI</a>
+          </nav>
+        </div>
+        <div>
+          <div class="footer-col-title">Resources</div>
+          <nav class="footer-links" aria-label="Footer resource links">
+            <a href="/openapi.json">OpenAPI Schema</a>
+            <a href="/redoc">ReDoc</a>
+            <a href="https://t.me/yorifederation" rel="noopener noreferrer" target="_blank">Yori Federation</a>
+          </nav>
+        </div>
+        <div>
+          <div class="footer-col-title">Status</div>
+          <nav class="footer-links" aria-label="Footer status links">
+            <a href="/api/health">API Health</a>
+            <a href="/docs#rate-limits">Rate Limits</a>
+            <a href="/docs#reliability">Reliability</a>
+          </nav>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Built for Telegram + Fragment username intelligence.</span>
+        <span>Public data only. No credentials required.</span>
+      </div>
     </div>
   </footer>
 

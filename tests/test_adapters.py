@@ -47,11 +47,6 @@ def test_normalize_formats(raw: str, expected: str) -> None:
     "raw,reason_part",
     [
         ("", "empty"),
-        ("duro", "too short"),
-        ("d" * 33, "too long"),
-        ("1durov", "must start with a letter"),
-        ("_durov", "start or end"),
-        ("durov_", "start or end"),
         ("du rov", "letters (a-z), digits (0-9) and underscores"),
         ("duro-v", "letters (a-z), digits (0-9) and underscores"),
         ("https://example.com/foo", "not a t.me"),
@@ -63,9 +58,27 @@ def test_invalid_usernames(raw: str, reason_part: str) -> None:
     assert result.reason is not None and reason_part in result.reason
 
 
+@pytest.mark.parametrize(
+    "raw,fragment_eligible",
+    [
+        ("duro", True),     # 4 chars → Fragment-eligible
+        ("d" * 33, False),  # too long for both
+        ("1durov", True),   # starts with digit → Telegram-ineligible but Fragment-eligible
+        ("_durov", True),   # starts with underscore
+        ("durov_", True),   # ends with underscore
+    ],
+)
+def test_parseable_but_telegram_ineligible(raw: str, fragment_eligible: bool) -> None:
+    """These inputs are parseable and Fragment-eligible even if Telegram rejects them."""
+    result = validate_username(raw)
+    assert result.valid is True, f"expected valid=True for '{raw}' — it is parseable"
+    assert result.telegram_eligible is False, f"expected telegram_eligible=False for '{raw}'"
+    assert result.fragment_eligible is fragment_eligible
+
+
 async def test_validation_never_makes_requests(checker, fake_http) -> None:
     response = await checker.check_username("a1")
-    assert response.result.status == OverallStatus.INVALID
+    assert response.result.status == OverallStatus.UNKNOWN
     assert response.telegram.checked is False
     assert response.fragment.checked is False
     assert fake_http.calls == []

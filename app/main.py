@@ -43,10 +43,14 @@ from .models import (
     ErrorInfo,
     ErrorResponse,
     HealthResponse,
+    OverallStatus,
     ReportResponse,
+    ResolveV2Response,
+    ResultSummary,
     utc_now_iso,
 )
 from .ratelimit import limiter
+from .resolver import InputType as InputTypeEnum, classify_query
 from .web import STATIC_DIR, render_page
 
 logging.basicConfig(level=getattr(logging, "INFO"))
@@ -121,6 +125,17 @@ def _http_error(status_code: int, code: ErrorCode, message: str) -> _ApiHttpErro
 @app.middleware("http")
 async def api_rate_limit(request: Request, call_next):
     path = request.url.path
+
+    # Vercel path correction: vercel.json rewrites `/(.*)` → `/api/index/$1`,
+    # so `scope["path"]` arrives as `/api/index/<original-path>`.  Strip the
+    # `/api/index` prefix so FastAPI can match its registered routes.
+    if path.startswith("/api/index"):
+        corrected = path[len("/api/index"):]
+        if not corrected.startswith("/"):
+            corrected = "/" + corrected
+        request.scope["path"] = corrected
+        path = corrected
+
     if not limiter.enabled or not limiter.applies_to(path):
         return await call_next(request)
 
@@ -286,6 +301,99 @@ async def check_bulk(
             f"too many usernames: {len(payload.usernames)} provided, maximum is {settings.bulk_max_usernames} per request",
         )
     return await get_checker(request).check_bulk(payload)
+
+
+# ---------------------------------------------------------------------------
+# v2 resolve endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/api/v2/resolve",
+    response_model=ResolveV2Response,
+    tags=["v2"],
+    summary="Resolve a username, numeric Telegram ID, or deep link",
+    description=(
+        "Classifies the input as a **username** (``durov``, ``@durov``, "
+        "``https://t.me/durov``) or a **numeric user ID** "
+        "(``7728424218``, ``tg://openmessage?user_id=7728424218``).\\n\\n"
+        "When the input is a **username**, the existing v1 checker is reused "
+        "— the response includes the full ``v1_check`` result with Telegram "
+        "and Fragment data.  When the input is a **numeric ID**, the API "
+        "validates syntax only — Telegram does **not** expose public profile "
+        "information for numeric user IDs through any legitimate public "
+        "mechanism, so ``resolved`` is always ``false`` and no upstream "
+        "requests are made to Telegram or Fragment.\\n\\n"
+        "Rate limits: 25 requests per IP per minute (shared with v1)."
+    ),
+)
+async def resolve_v2(
+    request: Request,
+    query: str = Query(
+        ...,
+        min_length=1,
+        max_length=512,
+        description="Username, Telegram user ID, or deep link in any supported format.",
+        examples=[
+            "durov",
+            "@durov",
+            "https://t.me/durov",
+            "yori",
+            "7728424218",
+            "tg://openmessage?user_id=7728424218",
+        ],
+    ),
+    _auth: None = Depends(require_api_key),
+) -> ResolveV2Response:
+    classified = classify_query(query)
+
+    if not classified.valid:
+        return ResolveV2Response(
+            success=True,
+            input=classified.input,
+            input_type=InputTypeEnum.USER_ID,
+            normalized="",
+            resolved=False,
+            result=ResultSummary(
+                status=OverallStatus.INVALID,
+                explanation=f"Invalid input: {classified.error}",
+            ),
+        )
+
+    if classified.input_type == InputTypeEnum.USERNAME:
+        v1_result = await get_checker(request).check_username(classified.normalized)
+        # Reuse the v1 status
+        return ResolveV2Response(
+            success=True,
+            input=classified.input,
+            input_type=InputTypeEnum.USERNAME,
+            normalized=classified.normalized,
+            v1_check=v1_result,
+            resolved=False,
+            result=ResultSummary(
+                status=OverallStatus.USERNAME_RESULT,
+                explanation=v1_result.result.explanation or "See v1_check for full details.",
+            ),
+        )
+
+    # Numeric user ID — no public resolution available.
+    return ResolveV2Response(
+        success=True,
+        input=classified.input,
+        input_type=InputTypeEnum.USER_ID,
+        normalized=classified.normalized,
+        user_id=classified.normalized,
+        resolved=False,
+        result=ResultSummary(
+            status=OverallStatus.UNRESOLVED,
+            explanation=(
+                "The Telegram user ID is syntactically valid, but Telegram does not expose "
+                "public profile information through any legitimate public mechanism available "
+                "to this API.  Numeric user ID resolution requires an authenticated Telegram "
+                "session with the user's access hash."
+            ),
+        ),
+    )
 
 
 # Static assets for the website (mounted last; explicit routes win).
