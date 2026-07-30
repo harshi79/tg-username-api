@@ -1,6 +1,5 @@
 /* TG Username API — interactive tester.
-   Talks only to this origin's /api/v1 endpoints, accepts usernames only,
-   and renders dynamic values exclusively through textContent. */
+   Two-panel layout: request → response. Renders dynamic values via textContent only. */
 (function () {
   "use strict";
 
@@ -20,7 +19,11 @@
 
   /* -------------------------------------------------- generic request flow */
   function runRequest(stateEls, requestFn, onData) {
-    setChip(stateEls.chip, "loading", "Loading…");
+    // Hide idle notice, show the result region
+    var idle = document.getElementById("tester-idle");
+    if (idle) idle.classList.add("hidden");
+
+    setChip(stateEls.chip, "loading", "Loading\u2026");
     stateEls.raw.classList.add("hidden");
     clear(stateEls.result);
     stateEls.region.classList.remove("hidden");
@@ -40,12 +43,12 @@
           return;
         }
         if (outcome.status >= 500 || outcome.body === null) {
-          setChip(stateEls.chip, "error", "Upstream unavailable");
+          setChip(stateEls.chip, "error", "Unavailable");
           addNotice(stateEls.result, "bad", "The service is temporarily unavailable. No data was returned.");
           return;
         }
         if (outcome.status === 400 || outcome.status === 401 || outcome.status === 422) {
-          setChip(stateEls.chip, "invalid", "Request rejected");
+          setChip(stateEls.chip, "invalid", "Rejected");
           var msg = outcome.body && outcome.body.error ? outcome.body.error.message : "The request was rejected.";
           addNotice(stateEls.result, "warn", msg);
           return;
@@ -53,7 +56,7 @@
         onData(outcome.body);
       })
       .catch(function () {
-        setChip(stateEls.chip, "error", "Upstream unavailable");
+        setChip(stateEls.chip, "error", "Network error");
         addNotice(stateEls.result, "bad", "Network error while reaching the API. Try again.");
       });
   }
@@ -86,7 +89,7 @@
     var value = el("div", "v");
     if (typeof valueNode === "string") value.classList.add("mono");
     if (valueNode && valueNode.nodeType) value.appendChild(valueNode);
-    else value.textContent = valueNode === null || valueNode === undefined ? "—" : String(valueNode);
+    else value.textContent = valueNode === null || valueNode === undefined ? "\u2014" : String(valueNode);
     card.appendChild(value);
     return card;
   }
@@ -107,42 +110,47 @@
   function renderCheckBody(stateEls, body, includeReport) {
     var region = stateEls.result;
     var status = body && body.result ? body.result.status : "unknown";
-    setChip(stateEls.chip, status === "invalid" ? "invalid" : "success", status === "invalid" ? "Invalid username" : "Done");
+    setChip(stateEls.chip, status === "invalid" ? "invalid" : "success", status === "invalid" ? "Invalid" : "Done");
 
     var grid = el("div", "result-grid");
     var tg = body.telegram || {};
     var fr = body.fragment || {};
     var val = body.validation || {};
 
-    grid.appendChild(kvCard("Normalized username", body.username ? "@" + body.username : "—"));
+    grid.appendChild(kvCard("Normalized username", body.username ? "@" + body.username : "\u2014"));
     grid.appendChild(kvCard("Final status", statusBadge(status)));
-    grid.appendChild(kvCard("Validation", tri(val.valid, "valid", "invalid", "—")));
-    if (val && val.valid === false) grid.appendChild(kvCard("Validation reason", val.reason));
+    grid.appendChild(kvCard("Input valid", tri(val.valid, "valid", "invalid", "\u2014")));
+    if (val.telegram_eligible !== undefined) {
+      grid.appendChild(kvCard("Telegram eligible", tri(val.telegram_eligible, "yes", "no", "\u2014")));
+    }
+    if (val.fragment_eligible !== undefined) {
+      grid.appendChild(kvCard("Fragment eligible", tri(val.fragment_eligible, "yes", "no", "\u2014")));
+    }
 
     if (tg.checked) {
-      grid.appendChild(kvCard("Telegram resolves", tri(tg.exists, "yes", "no", "inconclusive (ambiguous page)")));
-      grid.appendChild(kvCard("Telegram entity type", tg.entity_type || "—"));
+      grid.appendChild(kvCard("Telegram resolves", tri(tg.exists, "yes", "no", "inconclusive")));
+      grid.appendChild(kvCard("Telegram entity", tg.entity_type || "\u2014"));
     } else {
       grid.appendChild(kvCard("Telegram", "not checked"));
     }
 
     if (fr.checked) {
-      grid.appendChild(kvCard("Fragment page found", tri(fr.found, "yes", "no", "inconclusive")));
-      grid.appendChild(kvCard("Collectible state", tri(fr.collectible, "collectible", "not a collectible", "unknown")));
+      grid.appendChild(kvCard("Fragment page", tri(fr.found, "yes", "no", "inconclusive")));
+      grid.appendChild(kvCard("Collectible", tri(fr.collectible, "yes", "no", "unknown")));
       if (fr.status) grid.appendChild(kvCard("Marketplace state", fr.status.replace(/_/g, " ")));
       var priceText = fmtPrice(fr.price);
-      if (priceText) grid.appendChild(kvCard("Public TON price / min bid", priceText));
+      if (priceText) grid.appendChild(kvCard("Price / min bid", priceText));
       if (fr.auction && fr.auction.highest_bid) {
         var hb = fr.auction.highest_bid;
-        grid.appendChild(kvCard("Highest bid (public)", hb.amount + " " + (hb.currency || "TON") + (hb.approx_usd ? "  (~ " + hb.approx_usd + ")" : "")));
+        grid.appendChild(kvCard("Highest bid", hb.amount + " " + (hb.currency || "TON") + (hb.approx_usd ? "  (~ " + hb.approx_usd + ")" : "")));
       }
-      if (fr.auction && fr.auction.ends_in) grid.appendChild(kvCard("Auction ends in", fr.auction.ends_in));
+      if (fr.auction && fr.auction.ends_in) grid.appendChild(kvCard("Auction ends", fr.auction.ends_in));
       if (fr.url) grid.appendChild(kvCard("Fragment URL", fr.url));
     } else {
       grid.appendChild(kvCard("Fragment", "not checked"));
     }
 
-    grid.appendChild(kvCard("Checked at", body.checked_at || body.generated_at || "—"));
+    grid.appendChild(kvCard("Checked at", body.checked_at || body.generated_at || "\u2014"));
     region.appendChild(grid);
 
     if (body.result && body.result.explanation) {
@@ -151,7 +159,7 @@
 
     var srcError = tg.error || fr.error;
     if (srcError) {
-      addNotice(region, "bad", "Source error (" + (srcError.source || "upstream") + "): " + (srcError.message || "unknown") + " — the verdict stays conservative.");
+      addNotice(region, "bad", "Source error (" + (srcError.source || "upstream") + "): " + (srcError.message || "unknown") + " \u2014 the verdict stays conservative.");
     }
 
     if (includeReport && body.characteristics) {
@@ -159,15 +167,15 @@
       var cg = el("div", "result-grid");
       var c = body.characteristics;
       [["Length", c.length], ["Digits", c.digit_count], ["Underscores", c.underscore_count],
-       ["Letters only", tri(c.only_letters)], ["Longest repeated run", c.max_repeated_char_run],
-       ["Unique characters", c.unique_characters]
+       ["Letters only", tri(c.only_letters)], ["Max repeated run", c.max_repeated_char_run],
+       ["Unique chars", c.unique_characters]
       ].forEach(function (pair) { cg.appendChild(kvCard(pair[0], pair[1])); });
       region.appendChild(cg);
 
       if (body.heuristic_score) {
         var h = body.heuristic_score;
         var hg = el("div", "result-grid");
-        hg.appendChild(kvCard("Heuristic score (not a valuation)", h.score + " / 100"));
+        hg.appendChild(kvCard("Heuristic score", h.score + " / 100"));
         hg.appendChild(kvCard("Label", h.label));
         region.appendChild(hg);
         if (h.factor_notes && h.factor_notes.length) {
@@ -197,7 +205,7 @@
       counts[s] = (counts[s] || 0) + 1;
     });
     addNotice(region, "", body.total + " username(s) checked: " +
-      Object.keys(counts).map(function (s) { return counts[s] + " × " + s; }).join(", ") + ".");
+      Object.keys(counts).map(function (s) { return counts[s] + " \u00d7 " + s; }).join(", ") + ".");
 
     var wrap = el("div", "table-wrap");
     var table = el("table", "data");
@@ -212,7 +220,7 @@
       var row = el("tr");
       var tg = r.telegram || {};
       var fr = r.fragment || {};
-      row.appendChild(el("td", null, r.username ? "@" + r.username : (r.validation ? r.validation.input : "—"))).className = "mono";
+      row.appendChild(el("td", null, r.username ? "@" + r.username : (r.validation ? r.validation.input : "\u2014"))).className = "mono";
       var st = el("td");
       st.appendChild(statusBadge(r.result ? r.result.status : "unknown"));
       row.appendChild(st);
@@ -223,13 +231,13 @@
         else if (fr.found === false) frSummary = "no listing";
         else frSummary = "inconclusive";
         var p = fmtPrice(fr.price);
-        if (p) frSummary += " · " + p;
+        if (p) frSummary += " \u00b7 " + p;
       }
       row.appendChild(el("td", null, frSummary));
       var note = "";
       var srcError = tg.error || fr.error;
       if (srcError) note = srcError.code || "";
-      row.appendChild(el("td", null, note || "—"));
+      row.appendChild(el("td", null, note || "\u2014"));
       tbody.appendChild(row);
     });
 
@@ -268,8 +276,25 @@
         btn.setAttribute("aria-selected", "true");
         var panel = document.getElementById("panel-" + btn.getAttribute("data-tab"));
         if (panel) panel.classList.add("active");
+
+        // Show/hide the appropriate chip
+        var tab = btn.getAttribute("data-tab");
+        var chips = { single: "single-chip", report: "report-chip", resolve: "resolve-chip", bulk: "bulk-chip" };
+        Object.keys(chips).forEach(function (key) {
+          var chip = document.getElementById(chips[key]);
+          if (chip) chip.classList.toggle("hidden", key !== tab);
+        });
       });
     });
+  }
+
+  function clearResponse(els) {
+    clear(els.result);
+    els.region.classList.add("hidden");
+    els.raw.classList.add("hidden");
+    setChip(els.chip, "", "Ready");
+    var idle = document.getElementById("tester-idle");
+    if (idle) idle.classList.remove("hidden");
   }
 
   /* ------------------------------------------------------------------ init */
@@ -294,6 +319,7 @@
       }, function (body) { renderCheckBody(singleEls, body, false); });
     }
     document.getElementById("single-submit").addEventListener("click", submitSingle);
+    document.getElementById("single-clear").addEventListener("click", function () { clearResponse(singleEls); });
     singleInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); submitSingle(); } });
 
     var reportInput = document.getElementById("report-username");
@@ -312,8 +338,70 @@
       }, function (body) { renderCheckBody(reportEls, body, true); });
     }
     document.getElementById("report-submit").addEventListener("click", submitReport);
+    document.getElementById("report-clear").addEventListener("click", function () { clearResponse(reportEls); });
     reportInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); submitReport(); } });
 
+    /* --------------------------------------------------------------- Resolve */
+    var resolveInput = document.getElementById("resolve-query");
+    var resolveEls = {
+      chip: document.getElementById("resolve-chip"),
+      result: document.getElementById("resolve-result"),
+      region: document.getElementById("resolve-region"),
+      raw: document.getElementById("resolve-raw"),
+      rawBody: document.getElementById("resolve-raw-body")
+    };
+    function submitResolve() {
+      var value = resolveInput.value.trim();
+      if (!value) { resolveInput.focus(); return; }
+      runRequest(resolveEls, function () {
+        return fetch(window.location.origin + "/api/v2/resolve?query=" + encodeURIComponent(value), { headers: { "Accept": "application/json" } });
+      }, function (body) { renderResolveBody(resolveEls, body); });
+    }
+    function renderResolveBody(stateEls, body) {
+      var region = stateEls.result;
+      setChip(stateEls.chip, "success", "Done");
+      var grid = el("div", "result-grid");
+      grid.appendChild(kvCard("Input type", body.input_type || "\u2014"));
+      grid.appendChild(kvCard("Normalized", body.normalized || "\u2014"));
+      if (body.user_id) grid.appendChild(kvCard("User ID", body.user_id));
+      grid.appendChild(kvCard("Resolved", body.resolved === true ? "Yes" : body.resolved === false ? "No" : "\u2014"));
+
+      if (body.result && body.result.status) {
+        var rs = body.result.status;
+        var known = ["username_result", "resolved", "unresolved", "invalid"];
+        var cls = known.indexOf(rs) >= 0 ? "badge badge-" + rs : "badge";
+        if (rs === "username_result") cls = "badge badge-taken";
+        if (rs === "unresolved") cls = "badge badge-unknown";
+        var badge = el("span", cls, rs.replace(/_/g, " "));
+        grid.appendChild(kvCard("Result status", badge));
+        region.appendChild(grid);
+      }
+
+      if (body.result && body.result.explanation) {
+        var noteCls = body.input_type === "user_id" && body.resolved === false ? "" : "";
+        addNotice(region, noteCls, body.result.explanation);
+      }
+
+      // If this was a username, show the full v1 check result inline
+      if (body.v1_check) {
+        region.appendChild(el("h3", null, "v1 check result"));
+        // Reuse the existing check body renderer inline
+        var v1grid = el("div", "result-grid");
+        var tg = body.v1_check.telegram || {};
+        var fr = body.v1_check.fragment || {};
+        var val = body.v1_check.validation || {};
+        v1grid.appendChild(kvCard("Username", body.v1_check.username ? "@" + body.v1_check.username : "\u2014"));
+        v1grid.appendChild(kvCard("Telegram", tg.checked ? tri(tg.exists, "resolves", "no page", "inconclusive") : "skipped"));
+        v1grid.appendChild(kvCard("Fragment", fr.checked ? (fr.status ? fr.status.replace(/_/g, " ") : fr.found === false ? "no listing" : "inconclusive") : "skipped"));
+        v1grid.appendChild(kvCard("Status", body.v1_check.result ? body.v1_check.result.status : "\u2014"));
+        region.appendChild(v1grid);
+      }
+    }
+    document.getElementById("resolve-submit").addEventListener("click", submitResolve);
+    document.getElementById("resolve-clear").addEventListener("click", function () { clearResponse(resolveEls); });
+    resolveInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); submitResolve(); } });
+
+    /* --------------------------------------------------------------- Bulk */
     var bulkInput = document.getElementById("bulk-usernames");
     var bulkSubmit = document.getElementById("bulk-submit");
     var bulkEls = {
@@ -336,6 +424,7 @@
       }, function (body) { renderBulkBody(bulkEls, body); });
     }
     bulkSubmit.addEventListener("click", submitBulk);
+    document.getElementById("bulk-clear").addEventListener("click", function () { clearResponse(bulkEls); });
     bulkInput.addEventListener("keydown", function (e) {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); submitBulk(); }
     });

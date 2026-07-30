@@ -87,13 +87,30 @@ class UsernameChecker:
     async def _perform_check(self, validation: ValidationResult) -> CheckResponse:
         username = validation.normalized or ""
 
-        telegram = await self.telegram.check(username)
+        # --- Telegram lookup ------------------------------------------------
+        if validation.telegram_eligible:
+            telegram = await self.telegram.check(username)
+        else:
+            telegram = TelegramResult(
+                checked=False,
+                exists=None,
+                public_url="",
+                evidence=["Telegram check skipped: the username does not satisfy Telegram's eligibility rules"],
+            )
 
-        fragment = FragmentResult(checked=False)
-        if telegram.exists is True:
+        # --- Fragment lookup ------------------------------------------------
+        fragment: FragmentResult
+        if validation.fragment_eligible and telegram.exists is not True:
+            fragment = await self.fragment.check(username)
+        elif validation.fragment_eligible and telegram.exists is True:
+            fragment = FragmentResult(checked=False)
             fragment.evidence.append("not queried: the username already resolves on Telegram")
         else:
-            fragment = await self.fragment.check(username)
+            fragment = FragmentResult(checked=False)
+            if not validation.fragment_eligible:
+                fragment.evidence.append("Fragment check skipped: the username does not satisfy Fragment's eligibility rules")
+            else:
+                fragment.evidence.append("not queried: the username already resolves on Telegram")
 
         summary = self._decide(telegram, fragment)
 
@@ -184,7 +201,26 @@ class UsernameChecker:
                 ),
             )
 
-        # 5. Telegram indeterminate (bare page, deep link, errors...).
+        # 5. Telegram indeterminate (bare page, deep link, errors...) or
+        #    not checked (skipped due to Telegram eligibility rules).
+        if not telegram.checked:
+            # Telegram was skipped (e.g. too short).  Fragment already
+            # handled in case 2/3 above; if we land here Fragment found
+            # nothing useful either.
+            if fragment.found is False:
+                fragment_note = "Fragment has no listing for this handle"
+            elif fragment.error is not None:
+                fragment_note = f"the Fragment lookup also failed ({fragment.error.code.value})"
+            else:
+                fragment_note = "Fragment returned no usable information"
+            return ResultSummary(
+                status=OverallStatus.UNKNOWN,
+                explanation=(
+                    f"The username does not satisfy Telegram's eligibility rules so it was not checked there, "
+                    f"and {fragment_note}. Neither availability nor ownership can be confirmed."
+                ),
+            )
+
         detail = telegram.page_kind.value if telegram.page_kind else "no response"
         if fragment.error is not None:
             fragment_note = f"the Fragment lookup also failed ({fragment.error.code.value})"

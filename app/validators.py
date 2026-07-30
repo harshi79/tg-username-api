@@ -9,9 +9,24 @@ Accepted input formats (all normalized to a bare lowercase username):
     https://telegram.me/durov
     tg://resolve?domain=durov
 
-Telegram's public rules for regular usernames (a-z, 0-9, underscore, 5-32
-characters) are enforced *before* any network request is made, so obviously
-invalid input never reaches Telegram or Fragment.
+Validation is split into three layers:
+
+1. **Input validity** (``valid``) — is the input parseable into a normalized
+   username at all?  Non-strings, empty strings, and foreign URLs are rejected
+   immediately with no upstream requests.
+
+2. **Telegram eligibility** (``telegram_eligible``) — does the username satisfy
+   Telegram's public rules for regular usernames (5-32 chars, a-z, 0-9, _,
+   starts with a letter, no leading/trailing underscore)?  A username that is
+   *parseable* but too short for Telegram (e.g. 4-char ``yori``) is **not**
+   globally invalid — it simply cannot be checked on Telegram and is forwarded
+   to Fragment.
+
+3. **Fragment eligibility** (``fragment_eligible``) — does the username qualify
+   for a Fragment collectible lookup?  Fragment's observed minimum is **4**
+   characters (verified live 2026-07-30: ``yori`` has a dedicated
+   fragment.com/username/yori page with a minimum bid of 5,609 TON).  3-char
+   and shorter strings do not produce dedicated Fragment pages and are skipped.
 """
 
 from __future__ import annotations
@@ -22,8 +37,14 @@ from urllib.parse import parse_qs, urlparse
 from .models import ValidationResult
 
 # Publicly documented constraints for Telegram usernames.
-MIN_LENGTH = 5
-MAX_LENGTH = 32
+TG_MIN_LENGTH = 5
+TG_MAX_LENGTH = 32
+
+# Fragment minimum is 4 chars (verified live: yori has a dedicated Fragment
+# page at 4 chars; abc redirects to search at 3 chars).
+FRAGMENT_MIN_LENGTH = 4
+FRAGMENT_MAX_LENGTH = 32
+
 _ALLOWED_CHARS = re.compile(r"^[a-z0-9_]+$")
 
 _TME_HOSTS = {"t.me", "telegram.me", "www.t.me", "www.telegram.me", "telegram.dog"}
@@ -81,13 +102,25 @@ def normalize_username(raw: str) -> str:
     return candidate.lower()
 
 
+# ---------------------------------------------------------------------------
+# Global input validation (before any upstream request)
+# ---------------------------------------------------------------------------
+
 def validate_username(raw: object) -> ValidationResult:
-    """Validate a username *before* any network request.
+    """Validate and normalise the *raw input string*.
 
-    Returns a ValidationResult with the normalized form (when derivable) and a
-    precise reason when invalid.
+    Returns ``ValidationResult(valid=True)`` when the input can be parsed into
+    a bare lowercase username candidate.  *Does not* enforce Telegram's length
+    or character rules — those are split into ``telegram_eligible`` below so
+    that short Fragment-compatible names (e.g. the 4-char ``yori``) are still
+    forwarded to the Fragment adapter.
+
+    Returns ``valid=False`` only when:
+    * input is not a string
+    * input is empty
+    * input is a URL to a non-``t.me`` host
+    * no username could be extracted
     """
-
     if not isinstance(raw, str):
         return ValidationResult(valid=False, input=str(raw), normalized=None, reason="username must be a string")
 
@@ -113,20 +146,9 @@ def validate_username(raw: object) -> ValidationResult:
     if not normalized:
         return ValidationResult(valid=False, input=original, normalized=None, reason="no username could be extracted from the input")
 
-    if len(normalized) < MIN_LENGTH:
-        return ValidationResult(
-            valid=False,
-            input=original,
-            normalized=normalized,
-            reason=f"username is too short ({len(normalized)} chars); Telegram usernames are at least {MIN_LENGTH} characters",
-        )
-    if len(normalized) > MAX_LENGTH:
-        return ValidationResult(
-            valid=False,
-            input=original,
-            normalized=normalized,
-            reason=f"username is too long ({len(normalized)} chars); Telegram usernames are at most {MAX_LENGTH} characters",
-        )
+    # Basic character check — usernames that contain characters outside
+    # a-z, 0-9, _ are globally invalid (neither Telegram nor Fragment
+    # accepts them).
     if not _ALLOWED_CHARS.match(normalized):
         return ValidationResult(
             valid=False,
@@ -134,22 +156,8 @@ def validate_username(raw: object) -> ValidationResult:
             normalized=normalized,
             reason="username may only contain letters (a-z), digits (0-9) and underscores",
         )
-    if normalized[0] == "_" or normalized[-1] == "_":
-        return ValidationResult(
-            valid=False,
-            input=original,
-            normalized=normalized,
-            reason="username must not start or end with an underscore",
-        )
-    if not normalized[0].isalpha():
-        return ValidationResult(
-            valid=False,
-            input=original,
-            normalized=normalized,
-            reason="username must start with a letter",
-        )
+
     if normalized.split("/")[0].lower() in _RESERVED_PREFIXES and "/" in normalized:
-        # defensive: slashes should already be gone, treat as invalid format
         return ValidationResult(
             valid=False,
             input=original,
@@ -157,4 +165,56 @@ def validate_username(raw: object) -> ValidationResult:
             reason="username contains reserved URL path structure",
         )
 
-    return ValidationResult(valid=True, input=original, normalized=normalized, reason=None)
+    # The input is parseable — now determine eligibility for each source.
+    tg_eligible, _tg_reason = telegram_eligible(normalized)
+    fr_eligible, _fr_reason = fragment_eligible(normalized)
+
+    return ValidationResult(
+        valid=True,
+        input=original,
+        normalized=normalized,
+        reason=None,
+        telegram_eligible=tg_eligible,
+        fragment_eligible=fr_eligible,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Telegram eligibility (5-32 chars, letters/digits/underscore, starts letter,
+# no leading/trailing underscore)
+# ---------------------------------------------------------------------------
+
+def telegram_eligible(normalized: str) -> tuple[bool, str]:
+    """Check whether *normalized* could be a valid Telegram username.
+
+    Returns ``(True, "")`` or ``(False, reason_string)``.
+    """
+    length = len(normalized)
+    if length < TG_MIN_LENGTH:
+        return False, f"username is too short ({length} chars); Telegram usernames are at least {TG_MIN_LENGTH} characters"
+    if length > TG_MAX_LENGTH:
+        return False, f"username is too long ({length} chars); Telegram usernames are at most {TG_MAX_LENGTH} characters"
+    if normalized[0] == "_" or normalized[-1] == "_":
+        return False, "username must not start or end with an underscore"
+    if not normalized[0].isalpha():
+        return False, "username must start with a letter"
+    return True, ""
+
+
+# ---------------------------------------------------------------------------
+# Fragment eligibility (4-32 chars, letters/digits/underscore)
+# ---------------------------------------------------------------------------
+
+def fragment_eligible(normalized: str) -> tuple[bool, str]:
+    """Check whether *normalized* could be a Fragment collectible username.
+
+    Fragment's public collectible pages are observed for 4-character names
+    (e.g. ``yori``) but not for shorter lengths.  Returns ``(True, "")`` or
+    ``(False, reason_string)``.
+    """
+    length = len(normalized)
+    if length < FRAGMENT_MIN_LENGTH:
+        return False, f"username is too short ({length} chars); Fragment collectibles start at {FRAGMENT_MIN_LENGTH} characters"
+    if length > FRAGMENT_MAX_LENGTH:
+        return False, f"username is too long ({length} chars)"
+    return True, ""

@@ -1,0 +1,23 @@
+# Vercel deployment: exclude local development artefacts.
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+.DS_Store
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.git/
+.gitignore
+.env
+.env.*
+!.env.example
+README.md
+LICENSE
+pytest.ini
+tests/

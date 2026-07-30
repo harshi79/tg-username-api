@@ -1,384 +1,549 @@
-<section class="doc-section" id="intro" style="padding-top:38px">
-  <span class="hero-eyebrow">documentation</span>
-  <h1>TG Username API</h1>
-  <p class="section-lead">
-    Public-presence intelligence for Telegram usernames. For each username the API normalizes and
-    validates the input, checks whether the handle publicly resolves on Telegram
-    (<span class="inline-code">t.me</span>), and — when it does not — checks whether it exists as a
-    collectible on <a href="https://fragment.com/" rel="noopener" target="_blank">Fragment</a> with
-    its public marketplace/auction state and TON price when displayed. The API reads only public web
-    pages: no Telegram account, bot token, TON wallet or Fragment login is required.
+<section class="page-head-compact">
+  <span class="page-head-eyebrow">documentation</span>
+  <h1>Documentation</h1>
+  <p class="page-head-sub">
+    Complete reference for the TG Username API. Base URL:
+    <span class="inline-code">https://tg-username-api.vercel.app/api/v1</span>
   </p>
-  <p class="section-lead">
-    Verdicts are <strong>conservative</strong>: a username is reported
-    <span class="badge badge-available">available</span> only when every public source provides a
-    clean negative response, without any upstream failure. Everything else resolves to safe
-    statuses — and ambiguous evidence always becomes
-    <span class="badge badge-unknown">unknown</span>.
-  </p>
-  <div class="doc-toc">
-    <a href="#intro">Introduction</a>
-    <a href="#base-url">Base URL</a>
-    <a href="#rate-limits">Rate limits</a>
-    <a href="#statuses">Statuses</a>
-    <a href="#endpoint-check">check</a>
-    <a href="#endpoint-report">report</a>
-    <a href="#endpoint-bulk">bulk</a>
-    <a href="#endpoint-health">health</a>
-    <a href="#errors">Errors</a>
-    <a href="#reliability">Reliability rules</a>
-  </div>
 </section>
 
-<section class="doc-section doc-anchor" id="base-url">
-  <h2>Base URL</h2>
-  <p>All API endpoints live under <span class="inline-code">/api/v1</span> on this host:</p>
-  <div class="base-url-box">
-    <code data-base-url>https://host/api/v1</code>
-    <button class="copy-btn" data-copy=".base-url-box code" aria-label="Copy API base URL">Copy</button>
-  </div>
-  <p class="field-hint">Machine-readable contract: <a href="/openapi.json"><span class="inline-code">/openapi.json</span></a>
-    · interactive Swagger UI at <a href="/swagger"><span class="inline-code">/swagger</span></a>
-    · ReDoc at <a href="/redoc"><span class="inline-code">/redoc</span></a>.</p>
-</section>
+<div class="doc-layout">
+  <!-- Sidebar -->
+  <aside class="doc-sidebar" aria-label="Documentation sections">
+    <nav class="doc-sidebar-nav">
+      <a href="#intro">Introduction</a>
+      <a href="#authentication">Authentication</a>
+      <a href="#base-url">Base URL</a>
+      <a href="#rate-limits">Rate Limits</a>
+      <a href="#statuses">Statuses</a>
+      <a href="#endpoint-check">Check</a>
+      <a href="#endpoint-report">Report</a>
+      <a href="#endpoint-bulk">Bulk</a>
+      <a href="#endpoint-resolve">Resolver v2</a>
+      <a href="#errors">Errors</a>
+      <a href="#examples">Examples</a>
+    </nav>
+  </aside>
 
-<section class="doc-section doc-anchor" id="rate-limits">
-  <h2>Rate limits</h2>
-  <div class="notice"><strong>25 requests per IP address per minute</strong>, applied to
-    <span class="inline-code">/api/*</span> routes (website pages and static assets are exempt).</div>
-  <ul>
-    <li>The limiter uses fixed one-minute windows per client IP.</li>
-    <li>One bulk HTTP request counts as <strong>one API request</strong> against the IP quota —
-      the per-username effort inside a bulk call is bounded server-side instead
-      (maximum <strong>15 usernames</strong> per bulk request, limited upstream concurrency).</li>
-    <li>Every API response carries <span class="inline-code">X-RateLimit-Limit</span>,
-      <span class="inline-code">X-RateLimit-Remaining</span> and
-      <span class="inline-code">X-RateLimit-Reset</span> (unix epoch) headers.</li>
-    <li>When the quota is exceeded the API returns <strong>HTTP 429</strong> with the structured
-      error body below and a <span class="inline-code">Retry-After</span> header.</li>
-    <li><strong>Serverless note:</strong> the limiter is in-memory and therefore best-effort
-      <em>per instance</em>; across a fleet of Vercel instances the effective global quota can be
-      higher. A shared backend (e.g. Redis) can be plugged into the isolated storage layer
-      (<span class="inline-code">app/ratelimit.py</span>) when strictly-global enforcement is needed.</li>
-  </ul>
-  <div class="codeblock">
-    <div class="code-label"><span>HTTP 429 body</span><button class="copy-btn" data-copy="#rl-body">Copy</button></div>
-    <pre id="rl-body">{
+  <!-- Main content -->
+  <div class="doc-main">
+
+    <section class="doc-section doc-anchor" id="intro">
+      <h2>Introduction</h2>
+      <p>
+        TG Username API provides public-presence intelligence for Telegram usernames.
+        For each input, the API normalizes and validates the username, checks whether it
+        publicly resolves on Telegram (<span class="inline-code">t.me</span>), and &mdash;
+        when it does not &mdash; checks whether it exists as a collectible on
+        <a href="https://fragment.com/" rel="noopener" target="_blank">Fragment</a>
+        with its public marketplace/auction state and TON price when displayed.
+      </p>
+      <p>
+        The API reads <strong>only public web pages</strong>. No Telegram account, bot token,
+        TON wallet, or Fragment login is required. Verdicts are
+        <strong>conservative</strong>: a username is reported
+        <span class="badge badge-available">available</span> only when every source
+        provides a clean negative response.
+      </p>
+      <p>
+        Currently <strong>no API key is required</strong> &mdash; authentication can be
+        enabled server-side via the <span class="inline-code">API_KEYS</span> environment
+        variable if needed.
+      </p>
+    </section>
+
+    <section class="doc-section doc-anchor" id="authentication">
+      <h2>Authentication</h2>
+      <p>
+        By default, the API requires <strong>no authentication</strong>. All endpoints
+        are publicly accessible. Optional API key authentication can be enabled by setting
+        the <span class="inline-code">API_KEYS</span> environment variable (comma-separated)
+        and the <span class="inline-code">API_KEY_HEADER</span> header name (default:
+        <span class="inline-code">X-API-Key</span>).
+      </p>
+    </section>
+
+    <section class="doc-section doc-anchor" id="base-url">
+      <h2>Base URL</h2>
+      <p>All API endpoints are rooted at:</p>
+      <div class="base-url-box">
+        <code>https://tg-username-api.vercel.app/api/v1</code>
+        <button class="copy-btn" data-copy=".base-url-box code" aria-label="Copy base URL">Copy</button>
+      </div>
+      <p>
+        Machine-readable contract: <a href="/openapi.json"><span class="inline-code">/openapi.json</span></a>
+        &middot; Swagger UI at <a href="/swagger"><span class="inline-code">/swagger</span></a>
+        &middot; ReDoc at <a href="/redoc"><span class="inline-code">/redoc</span></a>.
+      </p>
+    </section>
+
+    <section class="doc-section doc-anchor" id="rate-limits">
+      <h2>Rate Limits</h2>
+      <div class="notice">
+        <strong>25 requests per IP address per minute</strong>, applied to
+        <span class="inline-code">/api/*</span> routes only.
+        Website pages and static assets are exempt.
+      </div>
+      <ul>
+        <li>The limiter uses fixed one-minute windows per client IP.</li>
+        <li>One bulk HTTP request counts as <strong>one</strong> API request against the IP quota.</li>
+        <li>Every API response includes <span class="inline-code">X-RateLimit-Limit</span>,
+          <span class="inline-code">X-RateLimit-Remaining</span>, and
+          <span class="inline-code">X-RateLimit-Reset</span> (Unix epoch) headers.</li>
+        <li>Exceeding the quota returns <strong>HTTP 429</strong> with a structured error body
+          and <span class="inline-code">Retry-After</span> header.</li>
+        <li>On serverless platforms the in-memory limiter is best-effort
+          <em>per instance</em>; a shared Redis backend can be plugged into
+          <span class="inline-code">app/ratelimit.py</span> for strictly global enforcement.</li>
+      </ul>
+
+      <div class="codeblock">
+        <div class="codeblock-header">
+          <span>HTTP 429 response</span>
+          <button class="copy-btn" data-copy="#doc-429-body">Copy</button>
+        </div>
+        <pre id="doc-429-body">{
   "success": false,
   "error": {
     "code": "rate_limit_exceeded",
     "message": "Rate limit exceeded. Try again shortly."
   }
 }</pre>
-  </div>
-</section>
+      </div>
 
-<section class="doc-section doc-anchor" id="statuses">
-  <h2>Statuses</h2>
-  <div class="table-wrap">
-    <table class="data">
-      <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
-      <tbody>
-        <tr><td><span class="badge badge-taken">taken</span></td>
-            <td>The username currently resolves on Telegram — public channel/group/bot page, or a
-              Fragment "claimed" report that is consistent with Telegram's bare user page.</td></tr>
-        <tr><td><span class="badge badge-fragment_collectible">fragment_collectible</span></td>
-            <td>Not publicly resolving on Telegram, but Fragment tracks it as a collectible
-              (<span class="inline-code">on_auction</span>, <span class="inline-code">for_sale</span>,
-              <span class="inline-code">sold</span>, <span class="inline-code">available</span>-to-auction,
-              or <span class="inline-code">unavailable</span>/held). Not freely claimable.</td></tr>
-        <tr><td><span class="badge badge-available">available</span></td>
-            <td>Telegram clearly does <strong>not</strong> resolve the handle (HTTP 404 or redirect to
-              <span class="inline-code">telegram.org</span>) <strong>and</strong> Fragment has no page
-              for it, with no upstream errors. Availability can change at any moment; claim it in the
-              official Telegram app to confirm.</td></tr>
-        <tr><td><span class="badge badge-invalid">invalid</span></td>
-            <td>Input failed local validation (see Telegram's public rules: 5–32 chars, a–z, 0–9,
-              underscore, starting with a letter). No external request was made.</td></tr>
-        <tr><td><span class="badge badge-unknown">unknown</span></td>
-            <td><strong>The API could not safely determine the state.</strong> Causes include
-              Telegram's ambiguous bare pages (rendered identically for private-profile users and
-              unclaimed handles), timeouts, rate limits, anti-bot pages and unexpected upstream
-              responses. Never treat <span class="inline-code">unknown</span> as available.</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
+      <h3>Bulk limits</h3>
+      <p>Maximum <strong>15 usernames</strong> per bulk request (HTTP 400
+      <span class="inline-code">payload_too_large</span> beyond that).</p>
+    </section>
 
-<section class="doc-section doc-anchor" id="endpoints">
-  <h2>Endpoints</h2>
-  <div class="table-wrap">
-    <table class="data">
-      <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
-      <tbody>
-        <tr><td><span class="endpoint-chip get">GET</span></td><td class="mono">/api/v1/check</td><td>Single username check</td></tr>
-        <tr><td><span class="endpoint-chip get">GET</span></td><td class="mono">/api/v1/report</td><td>Detailed username report</td></tr>
-        <tr><td><span class="endpoint-chip post">POST</span></td><td class="mono">/api/v1/check/bulk</td><td>Bulk check (max 15 usernames)</td></tr>
-        <tr><td><span class="endpoint-chip get">GET</span></td><td class="mono">/api/health</td><td>Liveness probe</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
+    <section class="doc-section doc-anchor" id="statuses">
+      <h2>Statuses</h2>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="badge badge-taken">taken</span></td>
+              <td>Resolves on Telegram (channel, group, bot) or Fragment "claimed" report consistent with Telegram.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-fragment_collectible">fragment_collectible</span></td>
+              <td>Not publicly resolving on Telegram, but Fragment tracks it as a collectible
+                (<span class="inline-code">on_auction</span>, <span class="inline-code">for_sale</span>,
+                <span class="inline-code">sold</span>, <span class="inline-code">available</span>-to-auction,
+                or <span class="inline-code">unavailable</span>/held). <strong>Not freely claimable.</strong></td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-available">available</span></td>
+              <td>Telegram clearly does <strong>not</strong> resolve the handle (HTTP 404 or redirect to
+                <span class="inline-code">telegram.org</span>) <strong>and</strong> Fragment has no page,
+                with no upstream errors. Can change at any time.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-invalid">invalid</span></td>
+              <td>Input failed local validation. No external request was made.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-unknown">unknown</span></td>
+              <td><strong>Could not safely determine state.</strong> Never assume availability from this status.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
-<section class="doc-section doc-anchor" id="endpoint-check">
-  <h2><span class="endpoint-chip get">GET</span> /api/v1/check</h2>
-  <p>Normalize, validate and check one username against Telegram — and Fragment only when it does
-    not resolve. <strong>Parameters</strong>:</p>
-  <div class="table-wrap">
-    <table class="data param-table">
-      <thead><tr><th>Name</th><th>In</th><th>Type</th><th>Description</th></tr></thead>
-      <tbody>
-        <tr><td>username</td><td>query</td><td>string (required)</td>
-            <td><span class="inline-code">durov</span>, <span class="inline-code">@durov</span> or
-              <span class="inline-code">https://t.me/durov</span></td></tr>
-      </tbody>
-    </table>
-  </div>
+    <!-- ====================== CHECK ====================== -->
+    <section class="doc-section doc-anchor" id="endpoint-check">
+      <h2><span class="endpoint-chip get">GET</span> /api/v1/check</h2>
+      <p>Normalize, validate and check one username against Telegram &mdash; and Fragment only when it does not resolve.</p>
 
-  <div class="two-col-code">
-    <div class="codeblock">
-      <div class="code-label"><span>cURL</span><button class="copy-btn" data-copy="#chk-curl">Copy</button></div>
-      <pre id="chk-curl">curl "<span data-base-url>https://host/api/v1</span>/check?username=durov"</pre>
-    </div>
-    <div class="codeblock">
-      <div class="code-label"><span>JavaScript (fetch)</span><button class="copy-btn" data-copy="#chk-js">Copy</button></div>
-      <pre id="chk-js">const res = await fetch("<span data-base-url>https://host/api/v1</span>/check?username=durov");
+      <h3>Parameters</h3>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>Name</th><th>In</th><th>Type</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="mono">username</td>
+              <td>query</td>
+              <td>string (required)</td>
+              <td><span class="inline-code">durov</span>, <span class="inline-code">@durov</span>, or <span class="inline-code">https://t.me/durov</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Request</h3>
+      <div class="two-col-code">
+        <div class="codeblock">
+          <div class="codeblock-header"><span>cURL</span><button class="copy-btn" data-copy="#doc-chk-curl">Copy</button></div>
+          <pre id="doc-chk-curl">curl "https://tg-username-api.vercel.app/api/v1/check?username=durov"</pre>
+        </div>
+        <div class="codeblock">
+          <div class="codeblock-header"><span>JavaScript</span><button class="copy-btn" data-copy="#doc-chk-js">Copy</button></div>
+          <pre id="doc-chk-js">const res = await fetch("https://tg-username-api.vercel.app/api/v1/check?username=durov");
 const data = await res.json();
-console.log(data.result.status); // "taken" | "fragment_collectible" | "available" | "invalid" | "unknown"</pre>
-    </div>
-    <div class="codeblock">
-      <div class="code-label"><span>Python (requests)</span><button class="copy-btn" data-copy="#chk-py">Copy</button></div>
-      <pre id="chk-py">import requests
-
-data = requests.get("<span data-base-url>https://host/api/v1</span>/check",
-                    params={"username": "durov"}, timeout=30).json()
+console.log(data.result.status);</pre>
+        </div>
+      </div>
+      <div class="codeblock">
+        <div class="codeblock-header"><span>Python</span><button class="copy-btn" data-copy="#doc-chk-py">Copy</button></div>
+        <pre id="doc-chk-py">import requests
+data = requests.get("https://tg-username-api.vercel.app/api/v1/check",
+    params={"username": "durov"}, timeout=30).json()
 print(data["result"]["status"])</pre>
-    </div>
-  </div>
+      </div>
 
-  <div class="codeblock">
-    <div class="code-label"><span>example response — taken channel (fields exactly as returned)</span><button class="copy-btn" data-copy="#chk-res">Copy</button></div>
-    <pre id="chk-res">{
+      <h3>Example response &mdash; taken</h3>
+      <div class="codeblock">
+        <div class="codeblock-header"><span>durov (channel)</span><button class="copy-btn" data-copy="#doc-chk-res1">Copy</button></div>
+        <pre id="doc-chk-res1">{
   "success": true,
   "username": "durov",
-  "validation": { "valid": true, "input": "durov", "normalized": "durov", "reason": null },
+  "validation": { "valid": true, "normalized": "durov" },
   "telegram": {
     "checked": true, "exists": true, "entity_type": "channel",
     "page_kind": "rich_profile_page", "display_name": "Pavel Durov",
-    "public_url": "https://t.me/durov", "http_status": 200,
-    "final_url": "https://t.me/durov",
-    "evidence": ["page title: 'Telegram: View @durov'"],
-    "error": null
+    "public_url": "https://t.me/durov", "http_status": 200
   },
   "fragment": {
-    "checked": false, "found": null, "collectible": null, "status": null,
-    "price": null, "auction": null, "url": null,
-    "evidence": ["not queried: the username already resolves on Telegram"],
-    "error": null
+    "checked": false,
+    "evidence": ["not queried: the username already resolves on Telegram"]
   },
-  "result": { "status": "taken",
-    "explanation": "@durov currently resolves on Telegram (public channel page)." },
+  "result": {
+    "status": "taken",
+    "explanation": "@durov currently resolves on Telegram (public channel page)."
+  },
   "cached": false,
   "checked_at": "2026-07-30T09:45:19Z"
 }</pre>
-  </div>
+      </div>
 
-  <div class="codeblock">
-    <div class="code-label"><span>example response — Fragment collectible (TON price from public listing)</span><button class="copy-btn" data-copy="#chk-res2">Copy</button></div>
-    <pre id="chk-res2">{
+      <h3>Example response &mdash; Fragment collectible</h3>
+      <div class="codeblock">
+        <div class="codeblock-header"><span>yori (Fragment collectible)</span><button class="copy-btn" data-copy="#doc-chk-res2">Copy</button></div>
+        <pre id="doc-chk-res2">{
   "success": true,
-  "username": "example",
-  "validation": { "valid": true, "input": "example", "normalized": "example", "reason": null },
-  "telegram": { "checked": true, "exists": false, "entity_type": null,
-                "page_kind": "not_found", "display_name": null,
-                "public_url": "https://t.me/example", "http_status": 404,
-                "final_url": "https://t.me/example",
-                "evidence": ["t.me answered with HTTP 404"], "error": null },
-  "fragment": {
-    "checked": true, "found": true, "collectible": true, "status": "for_sale",
-    "price": { "amount": 250.0, "currency": "TON", "approx_usd": "$355.40" },
-    "auction": null,
-    "url": "https://fragment.com/username/example",
-    "evidence": ["Fragment status badge: 'For sale'", "sale price publicly shown: 250.0 TON"],
-    "error": null
+  "username": "yori",
+  "validation": {
+    "valid": true,
+    "telegram_eligible": false,
+    "fragment_eligible": true
   },
-  "result": { "status": "fragment_collectible",
-    "explanation": "The username is tracked by Fragment (status: for sale). Publicly displayed price: 250.0 TON. It is not freely claimable." },
-  "cached": false,
-  "checked_at": "2026-07-30T09:45:19Z"
+  "telegram": {
+    "checked": false,
+    "evidence": ["Telegram check skipped: the username does not satisfy Telegram's eligibility rules"]
+  },
+  "fragment": {
+    "checked": true, "found": true, "collectible": true,
+    "status": "available",
+    "url": "https://fragment.com/username/yori",
+    "evidence": ["Fragment status badge: 'Available'"]
+  },
+  "result": {
+    "status": "fragment_collectible",
+    "explanation": "The username is tracked by Fragment (status: available). It is not freely claimable."
+  }
 }</pre>
-  </div>
+      </div>
 
-  <p><strong>Possible errors:</strong>
-    <span class="inline-code">422 validation_error</span> (missing/oversized
-    <span class="inline-code">username</span> parameter) ·
-    <span class="inline-code">401 unauthorized</span> (only when API-key auth is enabled) ·
-    <span class="inline-code">429 rate_limit_exceeded</span> ·
-    <span class="inline-code">500 internal_error</span>.
-    Upstream problems never change the HTTP status — they appear inside
-    <span class="inline-code">telegram.error</span> / <span class="inline-code">fragment.error</span>
-    with codes such as <span class="inline-code">upstream_timeout</span>,
-    <span class="inline-code">upstream_rate_limit</span>,
-    <span class="inline-code">upstream_server_error</span>,
-    <span class="inline-code">upstream_unrecognized_response</span> or
-    <span class="inline-code">network_error</span>.</p>
-</section>
+      <h3>Possible errors</h3>
+      <p>
+        <span class="inline-code">422 validation_error</span> &middot;
+        <span class="inline-code">400 payload_too_large</span> &middot;
+        <span class="inline-code">429 rate_limit_exceeded</span> &middot;
+        <span class="inline-code">500 internal_error</span>.
+        Upstream errors never change the HTTP status; they appear inside
+        <span class="inline-code">telegram.error</span> / <span class="inline-code">fragment.error</span>.
+      </p>
+    </section>
 
-<section class="doc-section doc-anchor" id="endpoint-report">
-  <h2><span class="endpoint-chip get">GET</span> /api/v1/report</h2>
-  <p>Everything from <span class="inline-code">/check</span>, plus objective username
-    characteristics, all gathered public signals, and a clearly-labelled
-    <em>heuristic</em> score (never a market valuation). Same parameter:
-    <span class="inline-code">username</span> (query, required).</p>
+    <!-- ====================== REPORT ====================== -->
+    <section class="doc-section doc-anchor" id="endpoint-report">
+      <h2><span class="endpoint-chip get">GET</span> /api/v1/report</h2>
+      <p>Everything from <span class="inline-code">/check</span>, plus objective username
+        characteristics and a clearly-labelled <em>heuristic</em> score (never a market valuation).</p>
 
-  <div class="codeblock">
-    <div class="code-label"><span>cURL</span><button class="copy-btn" data-copy="#rep-curl">Copy</button></div>
-    <pre id="rep-curl">curl "<span data-base-url>https://host/api/v1</span>/report?username=durov"</pre>
-  </div>
-  <div class="codeblock">
-    <div class="code-label"><span>JavaScript (fetch)</span><button class="copy-btn" data-copy="#rep-js">Copy</button></div>
-    <pre id="rep-js">const data = await (await fetch("<span data-base-url>https://host/api/v1</span>/report?username=durov")).json();
+      <h3>Parameters</h3>
+      <p>Same as <span class="inline-code">/check</span>: <span class="inline-code">username</span> (query, required).</p>
+
+      <div class="two-col-code">
+        <div class="codeblock">
+          <div class="codeblock-header"><span>cURL</span><button class="copy-btn" data-copy="#doc-rep-curl">Copy</button></div>
+          <pre id="doc-rep-curl">curl "https://tg-username-api.vercel.app/api/v1/report?username=durov"</pre>
+        </div>
+        <div class="codeblock">
+          <div class="codeblock-header"><span>JavaScript</span><button class="copy-btn" data-copy="#doc-rep-js">Copy</button></div>
+          <pre id="doc-rep-js">const data = await (await fetch(
+  "https://tg-username-api.vercel.app/api/v1/report?username=durov"
+)).json();
 console.log(data.characteristics.length, data.heuristic_score.score);</pre>
-  </div>
-  <div class="codeblock">
-    <div class="code-label"><span>Python (requests)</span><button class="copy-btn" data-copy="#rep-py">Copy</button></div>
-    <pre id="rep-py">import requests
+        </div>
+      </div>
 
-data = requests.get("<span data-base-url>https://host/api/v1</span>/report",
-                    params={"username": "durov"}, timeout=30).json()
-print(data["characteristics"], data["heuristic_score"]["label"])</pre>
-  </div>
-
-  <div class="codeblock">
-    <div class="code-label"><span>example response — report additions (check fields omitted for brevity)</span><button class="copy-btn" data-copy="#rep-res">Copy</button></div>
-    <pre id="rep-res">{
+      <div class="codeblock">
+        <div class="codeblock-header"><span>Example &mdash; report additions</span><button class="copy-btn" data-copy="#doc-rep-res">Copy</button></div>
+        <pre id="doc-rep-res">{
   "success": true,
   "username": "durov",
-  "result": { "status": "taken", "explanation": "@durov currently resolves on Telegram (public channel page)." },
+  "result": { "status": "taken" },
   "characteristics": {
-    "length": 5, "digit_count": 0, "underscore_count": 0, "alpha_count": 5,
-    "starts_with_letter": true, "ends_with_letter_or_digit": true,
-    "has_digits": false, "has_underscores": false, "only_letters": true,
-    "max_repeated_char_run": 1, "unique_characters": 5
+    "length": 5, "digit_count": 0, "underscore_count": 0,
+    "only_letters": true, "unique_characters": 5
   },
   "heuristic_score": {
     "score": 74,
     "label": "heuristic",
-    "factor_notes": ["minimum possible length (5) — short handles are scarce",
+    "factor_notes": ["minimum possible length (5)",
                      "contains no underscores", "letters only"]
   },
-  "signals": ["page title: 'Telegram: View @durov'", "public counters: 11 419 432  subscribers"],
-  "cached": false,
-  "generated_at": "2026-07-30T09:45:19Z"
+  "signals": ["page title: 'Telegram: View @durov'"]
 }</pre>
-  </div>
-  <p><strong>Possible errors:</strong> same set as <span class="inline-code">/check</span>
-    (<span class="inline-code">422</span>, <span class="inline-code">401</span>,
-    <span class="inline-code">429</span>, <span class="inline-code">500</span>).</p>
-</section>
+      </div>
+    </section>
 
-<section class="doc-section doc-anchor" id="endpoint-bulk">
-  <h2><span class="endpoint-chip post">POST</span> /api/v1/check/bulk</h2>
-  <p>Check several usernames concurrently with bounded upstream concurrency. Maximum
-    <strong>15 usernames</strong> per request — enforced on the server. Input order is preserved;
-    duplicates share one upstream lookup. One bulk call counts as one rate-limited API request.</p>
+    <!-- ====================== BULK ====================== -->
+    <section class="doc-section doc-anchor" id="endpoint-bulk">
+      <h2><span class="endpoint-chip post">POST</span> /api/v1/check/bulk</h2>
+      <p>Check several usernames concurrently with bounded upstream concurrency.
+        <strong>Maximum 15 usernames</strong> per request. Input order preserved;
+        duplicates share one upstream lookup. One bulk call counts as one rate-limited API request.</p>
 
-  <div class="codeblock">
-    <div class="code-label"><span>cURL</span><button class="copy-btn" data-copy="#blk-curl">Copy</button></div>
-    <pre id="blk-curl">curl -X POST "<span data-base-url>https://host/api/v1</span>/check/bulk" \
+      <h3>Request body</h3>
+      <div class="codeblock">
+        <div class="codeblock-header"><span>application/json</span></div>
+        <pre>{
+  "usernames": ["yorivex", "@yorixa", "https://t.me/yorzen"]
+}</pre>
+      </div>
+
+      <div class="two-col-code">
+        <div class="codeblock">
+          <div class="codeblock-header"><span>cURL</span><button class="copy-btn" data-copy="#doc-bulk-curl">Copy</button></div>
+          <pre id="doc-bulk-curl">curl -X POST "https://tg-username-api.vercel.app/api/v1/check/bulk" \
   -H "Content-Type: application/json" \
   -d '{"usernames": ["yorivex", "@yorixa", "https://t.me/yorzen"]}'</pre>
-  </div>
-  <div class="codeblock">
-    <div class="code-label"><span>JavaScript (fetch)</span><button class="copy-btn" data-copy="#blk-js">Copy</button></div>
-    <pre id="blk-js">const res = await fetch("<span data-base-url>https://host/api/v1</span>/check/bulk", {
+        </div>
+        <div class="codeblock">
+          <div class="codeblock-header"><span>JavaScript</span><button class="copy-btn" data-copy="#doc-bulk-js">Copy</button></div>
+          <pre id="doc-bulk-js">const res = await fetch("https://tg-username-api.vercel.app/api/v1/check/bulk", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ usernames: ["yorivex", "@yorixa", "https://t.me/yorzen"] })
 });
 const data = await res.json();
 console.log(data.total, data.results.map(r => r.result.status));</pre>
-  </div>
-  <div class="codeblock">
-    <div class="code-label"><span>Python (requests)</span><button class="copy-btn" data-copy="#blk-py">Copy</button></div>
-    <pre id="blk-py">import requests
+        </div>
+      </div>
 
-data = requests.post("<span data-base-url>https://host/api/v1</span>/check/bulk",
-                     json={"usernames": ["yorivex", "@yorixa", "https://t.me/yorzen"]},
-                     timeout=60).json()
-print(data["total"], [r["username"] for r in data["results"]])</pre>
-  </div>
-
-  <div class="codeblock">
-    <div class="code-label"><span>example response (shape)</span><button class="copy-btn" data-copy="#blk-res">Copy</button></div>
-    <pre id="blk-res">{
+      <h3>Example response</h3>
+      <div class="codeblock">
+        <div class="codeblock-header"><span>200 OK</span><button class="copy-btn" data-copy="#doc-bulk-res">Copy</button></div>
+        <pre id="doc-bulk-res">{
   "success": true,
   "total": 3,
   "results": [
-    { "success": true, "username": "yorivex", "validation": {"valid": true, "...": "..."},
-      "result": { "status": "available", "explanation": "... " } },
-    { "success": true, "username": "yorixa", "result": { "status": "available", "...": "..." } },
-    { "success": true, "username": "yorzen", "result": { "status": "available", "...": "..." } }
+    { "success": true, "username": "yorivex",
+      "result": { "status": "available" } },
+    { "success": true, "username": "yorixa",
+      "result": { "status": "available" } },
+    { "success": true, "username": "yorzen",
+      "result": { "status": "available" } }
   ],
   "generated_at": "2026-07-30T09:45:19Z"
 }</pre>
-  </div>
-  <p><strong>Possible errors:</strong>
-    <span class="inline-code">400 payload_too_large</span> (more than 15 usernames) ·
-    <span class="inline-code">422 validation_error</span> (empty/malformed body) ·
-    <span class="inline-code">401 unauthorized</span> ·
-    <span class="inline-code">429 rate_limit_exceeded</span> ·
-    <span class="inline-code">500 internal_error</span>.</p>
-</section>
+      </div>
+    </section>
 
-<section class="doc-section doc-anchor" id="endpoint-health">
-  <h2><span class="endpoint-chip get">GET</span> /api/health</h2>
-  <p>Liveness probe.</p>
-  <div class="codeblock">
-    <div class="code-label"><span>example response</span><button class="copy-btn" data-copy="#hl-res">Copy</button></div>
-    <pre id="hl-res">{ "status": "ok" }</pre>
-  </div>
-</section>
+    <!-- ====================== RESOLVE v2 ====================== -->
+    <section class="doc-section doc-anchor" id="endpoint-resolve">
+      <h2><span class="endpoint-chip get">GET</span> /api/v2/resolve</h2>
+      <p>Advanced input resolver that accepts usernames, numeric Telegram IDs, and Telegram deep links through one unified endpoint.</p>
 
-<section class="doc-section doc-anchor" id="errors">
-  <h2>Error reference</h2>
-  <p>Transport-level errors are always JSON with <span class="inline-code">success: false</span>:</p>
-  <div class="table-wrap">
-    <table class="data">
-      <thead><tr><th>HTTP</th><th>error.code</th><th>When</th></tr></thead>
-      <tbody>
-        <tr><td class="mono">400</td><td class="mono">payload_too_large</td><td>Bulk request with 16+ usernames.</td></tr>
-        <tr><td class="mono">401</td><td class="mono">unauthorized</td><td>API-key auth enabled and key missing/invalid.</td></tr>
-        <tr><td class="mono">422</td><td class="mono">validation_error</td><td>Missing/incorrect request shape.</td></tr>
-        <tr><td class="mono">429</td><td class="mono">rate_limit_exceeded</td><td>More than 25 requests in the current minute window.</td></tr>
-        <tr><td class="mono">500</td><td class="mono">internal_error</td><td>Unexpected server error. Retryable.</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <p style="margin-top:12px"><strong>Source-level errors</strong> (Telegram/Fragment) never change
-    the HTTP status and never become an availability verdict — they are reported inside
-    <span class="inline-code">telegram.error</span> / <span class="inline-code">fragment.error</span>:
-    <span class="inline-code">upstream_timeout</span>,
-    <span class="inline-code">upstream_rate_limit</span>,
-    <span class="inline-code">upstream_blocked</span>,
-    <span class="inline-code">upstream_server_error</span>,
-    <span class="inline-code">upstream_unrecognized_response</span>,
-    <span class="inline-code">network_error</span>.</p>
-</section>
+      <h3>Supported input forms</h3>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>Input Format</th><th>Example</th><th>Classification</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">username</td><td class="mono">durov</td><td><span class="inline-code">username</span></td></tr>
+            <tr><td class="mono">@username</td><td class="mono">@durov</td><td><span class="inline-code">username</span></td></tr>
+            <tr><td class="mono">t.me URL</td><td class="mono">https://t.me/durov</td><td><span class="inline-code">username</span></td></tr>
+            <tr><td class="mono">numeric user ID</td><td class="mono">7728424218</td><td><span class="inline-code">user_id</span></td></tr>
+            <tr><td class="mono">tg:// deep link</td><td class="mono">tg://openmessage?user_id=7728424218</td><td><span class="inline-code">user_id</span></td></tr>
+          </tbody>
+        </table>
+      </div>
 
-<section class="doc-section doc-anchor" id="reliability">
-  <h2>Reliability rules</h2>
-  <ul>
-    <li>Telegram not resolving does <strong>not</strong> mean available — Fragment is checked, and
-      both sources must be cleanly negative for an
-      <span class="badge badge-available">available</span> verdict.</li>
-    <li>Telegram renders <em>identical</em> bare pages for private-profile users and unclaimed
-      handles (verified 2026-07-30) — those yield
-      <span class="badge badge-unknown">unknown</span>, never a guess.</li>
-    <li>Network failures, timeouts, rate limits and unrecognized upstream pages degrade to
-      <span class="badge badge-unknown">unknown</span>.</li>
-    <li>Prices and bids are copied from public Fragment listings only — never estimated. The
-      heuristic score in reports resembles rarity, not value.</li>
-    <li>Results are cached briefly (5 minutes by default) because ownership can change at any time.</li>
-  </ul>
-</section>
+      <h3>How it works</h3>
+      <p>
+        <strong>Username inputs</strong> (<span class="inline-code">@durov</span>,
+        <span class="inline-code">https://t.me/durov</span>) are forwarded to the
+        existing v1 checker &mdash; the response includes the full
+        <span class="inline-code">v1_check</span> result with Telegram and Fragment data.
+      </p>
+      <p>
+        <strong>Numeric user IDs</strong> (<span class="inline-code">7728424218</span>,
+        <span class="inline-code">tg://openmessage?user_id=7728424218</span>) are validated for
+        syntactic correctness only. Telegram does <strong>not</strong> expose public profile
+        information for numeric user IDs through any legitimate public mechanism &mdash;
+        numeric ID resolution requires an authenticated Telegram session. The API clearly
+        returns <span class="inline-code">resolved: false</span> for numeric IDs and never
+        fabricates profile data.
+      </p>
+      <p>
+        <strong>Important:</strong> Numeric Telegram IDs are <strong>never</strong> sent to
+        Fragment for lookup. Fragment checking is username-only.
+      </p>
+
+      <h3>Parameters</h3>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>Name</th><th>In</th><th>Type</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="mono">query</td>
+              <td>query</td>
+              <td>string (required)</td>
+              <td>Username, @username, t.me URL, numeric Telegram ID, or tg:// deep link</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="two-col-code">
+        <div class="codeblock">
+          <div class="codeblock-header"><span>cURL &mdash; username</span><button class="copy-btn" data-copy="#doc-res-curl1">Copy</button></div>
+          <pre id="doc-res-curl1">curl "https://tg-username-api.vercel.app/api/v2/resolve?query=@yori"</pre>
+        </div>
+        <div class="codeblock">
+          <div class="codeblock-header"><span>cURL &mdash; user ID</span><button class="copy-btn" data-copy="#doc-res-curl2">Copy</button></div>
+          <pre id="doc-res-curl2">curl "https://tg-username-api.vercel.app/api/v2/resolve?query=7728424218"</pre>
+        </div>
+      </div>
+
+      <h3>Example response &mdash; username</h3>
+      <div class="codeblock">
+        <div class="codeblock-header"><span>@yori → username_result</span><button class="copy-btn" data-copy="#doc-res-res1">Copy</button></div>
+        <pre id="doc-res-res1">{
+  "success": true,
+  "input": "@yori",
+  "input_type": "username",
+  "normalized": "yori",
+  "v1_check": {
+    "success": true,
+    "username": "yori",
+    "validation": {
+      "valid": true,
+      "telegram_eligible": false,
+      "fragment_eligible": true
+    },
+    "fragment": {
+      "checked": true,
+      "found": true,
+      "collectible": true,
+      "status": "available",
+      "url": "https://fragment.com/username/yori"
+    },
+    "result": {
+      "status": "fragment_collectible",
+      "explanation": "The username is tracked by Fragment (status: available)."
+    }
+  },
+  "result": {
+    "status": "username_result",
+    "explanation": "See v1_check for full details."
+  }
+}</pre>
+      </div>
+
+      <h3>Example response &mdash; numeric user ID</h3>
+      <div class="codeblock">
+        <div class="codeblock-header"><span>7728424218 → unresolved</span><button class="copy-btn" data-copy="#doc-res-res2">Copy</button></div>
+        <pre id="doc-res-res2">{
+  "success": true,
+  "input": "7728424218",
+  "input_type": "user_id",
+  "normalized": "7728424218",
+  "user_id": "7728424218",
+  "resolved": false,
+  "result": {
+    "status": "unresolved",
+    "explanation": "The Telegram user ID is syntactically valid, but Telegram does not expose public profile information through any legitimate public mechanism available to this API."
+  }
+}</pre>
+      </div>
+    </section>
+
+    <!-- ====================== ERRORS ====================== -->
+    <section class="doc-section doc-anchor" id="errors">
+      <h2>Error Reference</h2>
+      <p>Transport-level errors always return JSON with <span class="inline-code">success: false</span>:</p>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>HTTP</th><th><span class="inline-code">error.code</span></th><th>When</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">400</td><td class="mono">payload_too_large</td><td>Bulk request with 16+ usernames.</td></tr>
+            <tr><td class="mono">401</td><td class="mono">unauthorized</td><td>API-key auth enabled and key missing/invalid.</td></tr>
+            <tr><td class="mono">422</td><td class="mono">validation_error</td><td>Missing or malformed request.</td></tr>
+            <tr><td class="mono">429</td><td class="mono">rate_limit_exceeded</td><td>More than 25 requests in the current minute.</td></tr>
+            <tr><td class="mono">500</td><td class="mono">internal_error</td><td>Unexpected server error. Retryable.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:12px">
+        <strong>Source-level errors</strong> (Telegram/Fragment) never change the HTTP status or
+        become an availability verdict &mdash; they appear inside
+        <span class="inline-code">telegram.error</span> / <span class="inline-code">fragment.error</span>:
+        <span class="inline-code">upstream_timeout</span>,
+        <span class="inline-code">upstream_rate_limit</span>,
+        <span class="inline-code">upstream_blocked</span>,
+        <span class="inline-code">upstream_server_error</span>,
+        <span class="inline-code">upstream_unrecognized_response</span>,
+        <span class="inline-code">network_error</span>.
+      </p>
+    </section>
+
+    <!-- ====================== EXAMPLES ====================== -->
+    <section class="doc-section doc-anchor" id="examples">
+      <h2>Examples</h2>
+
+      <h3>Quick check</h3>
+      <div class="codeblock">
+        <div class="codeblock-header"><span>Check @yori</span></div>
+        <pre>curl "https://tg-username-api.vercel.app/api/v1/check?username=yori"</pre>
+      </div>
+
+      <h3>Bulk check</h3>
+      <div class="codeblock">
+        <div class="codeblock-header"><span>Check multiple usernames</span></div>
+        <pre>curl -X POST "https://tg-username-api.vercel.app/api/v1/check/bulk" \
+  -H "Content-Type: application/json" \
+  -d '{"usernames": ["durov", "botfather", "yorivex"]}'</pre>
+      </div>
+
+      <h3>Detailed report</h3>
+      <div class="codeblock">
+        <div class="codeblock-header"><span>Get report for @durov</span></div>
+        <pre>curl "https://tg-username-api.vercel.app/api/v1/report?username=durov"</pre>
+      </div>
+
+      <h3>Resolve numeric ID</h3>
+      <div class="codeblock">
+        <div class="codeblock-header"><span>Resolve Telegram user ID</span></div>
+        <pre>curl "https://tg-username-api.vercel.app/api/v2/resolve?query=7728424218"</pre>
+      </div>
+
+      <h3>Resolve deep link</h3>
+      <div class="codeblock">
+        <div class="codeblock-header"><span>Resolve tg:// deep link</span></div>
+        <pre>curl "https://tg-username-api.vercel.app/api/v2/resolve?query=tg://openmessage?user_id=7728424218"</pre>
+      </div>
+
+      <h3>Health check</h3>
+      <div class="codeblock">
+        <div class="codeblock-header"><span>Liveness probe</span></div>
+        <pre>curl "https://tg-username-api.vercel.app/api/health"</pre>
+      </div>
+    </section>
+
+  </div>
+</div>

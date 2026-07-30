@@ -1,5 +1,5 @@
-/* TG Username API — shared site behaviour: dynamic base URL, copy buttons,
-   live health dot. No secrets, no innerHTML with dynamic data. */
+/* TG Username API — shared site behaviour.
+   Dynamic base URL, copy buttons, live health indicator, mobile nav toggle. */
 (function () {
   "use strict";
 
@@ -7,7 +7,7 @@
     return window.location.origin + "/api/v1";
   }
 
-  /* Fill every [data-base-url] element with the real, current-host base URL. */
+  /* Fill [data-base-url] elements with the real API base URL. */
   function paintBaseUrls() {
     var base = apiBase();
     document.querySelectorAll("[data-base-url]").forEach(function (el) {
@@ -29,7 +29,7 @@
         var text = target.textContent || "";
         copyText(text).then(function (ok) {
           var original = btn.textContent;
-          btn.textContent = ok ? "Copied" : "Select + copy";
+          btn.textContent = ok ? "Copied" : "Failed";
           btn.classList.add("copied");
           window.setTimeout(function () {
             btn.textContent = original;
@@ -67,18 +67,49 @@
     }
   }
 
-  /* Live health dot in the footer (best-effort, silently ignored on failure). */
+  /* Live health indicator in the navigation bar. */
   function paintHealth() {
     var dot = document.querySelector("[data-health-dot]");
+    var label = document.querySelector("[data-health-label]");
     if (!dot) return;
     fetch("/api/health", { headers: { "Accept": "application/json" } })
-      .then(function (res) { dot.classList.add(res.ok ? "ok" : "down"); })
-      .catch(function () { dot.classList.add("down"); });
+      .then(function (res) {
+        if (res.ok) {
+          dot.classList.add("ok");
+          if (label) label.textContent = "Operational";
+        } else {
+          dot.classList.add("down");
+          if (label) label.textContent = "Degraded";
+        }
+      })
+      .catch(function () {
+        dot.classList.add("down");
+        if (label) label.textContent = "Unavailable";
+      });
+  }
+
+  /* Mobile navigation toggle */
+  function bindNavToggle() {
+    var toggle = document.getElementById("nav-toggle");
+    var nav = document.getElementById("main-nav");
+    if (!toggle || !nav) return;
+    toggle.addEventListener("click", function () {
+      var expanded = nav.classList.toggle("open");
+      toggle.setAttribute("aria-expanded", expanded);
+    });
+    /* Close nav when clicking a link (mobile) */
+    nav.querySelectorAll("a").forEach(function (link) {
+      link.addEventListener("click", function () {
+        nav.classList.remove("open");
+        toggle.setAttribute("aria-expanded", "false");
+      });
+    });
   }
 
   document.addEventListener("DOMContentLoaded", function () {
     paintBaseUrls();
     bindCopyButtons();
     paintHealth();
+    bindNavToggle();
   });
 })();

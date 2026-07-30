@@ -29,6 +29,8 @@ class OverallStatus(str, Enum):
     AVAILABLE = "available"
     INVALID = "invalid"
     UNKNOWN = "unknown"
+    USERNAME_RESULT = "username_result"
+    UNRESOLVED = "unresolved"
 
 
 class EntityType(str, Enum):
@@ -86,6 +88,8 @@ class ValidationResult(BaseModel):
     input: str = Field(description="The raw input exactly as received.")
     normalized: Optional[str] = Field(default=None, description="Normalized lowercase username without '@' or URL parts.")
     reason: Optional[str] = Field(default=None, description="Human readable reason when the input is invalid.")
+    telegram_eligible: bool = Field(default=True, description="Whether the username satisfies Telegram's eligibility rules (5-32 chars, a-z0-9_, starts with letter, etc.).")
+    fragment_eligible: bool = Field(default=True, description="Whether the username is eligible for Fragment lookup (4-32 chars, a-z0-9_).")
 
 
 # ---------------------------------------------------------------------------
@@ -252,6 +256,35 @@ class ErrorResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "ok"
+
+
+# ---------------------------------------------------------------------------
+# v2 Resolve
+# ---------------------------------------------------------------------------
+
+
+class InputType(str, Enum):
+    USERNAME = "username"
+    USER_ID = "user_id"
+
+
+class ResolveV2ResultStatus(str, Enum):
+    USERNAME_RESULT = "username_result"
+    RESOLVED = "resolved"
+    UNRESOLVED = "unresolved"
+    INVALID = "invalid"
+
+
+class ResolveV2Response(BaseModel):
+    success: bool
+    input: str = Field(description="The raw input exactly as received.")
+    input_type: InputType = Field(description="Whether the input was classified as a username or user_id.")
+    normalized: str = Field(description="Normalized form: bare lowercase username or numeric user ID string.")
+    v1_check: Optional[CheckResponse] = Field(default=None, description="Reused v1 check result when input was a username.")
+    user_id: Optional[str] = Field(default=None, description="The extracted numeric user ID when input_type is user_id.")
+    resolved: bool = Field(default=False, description="Whether the ID could be publicly resolved to a profile (always false for numeric IDs).")
+    result: ResultSummary = Field(description="Resolution status summary.")
+    generated_at: str = Field(default_factory=utc_now_iso)
 
 
 class RootResponse(BaseModel):
