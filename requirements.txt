@@ -1,0 +1,8 @@
+# Core web framework (Pydantic v2 included transitively)
+fastapi>=0.115,<1.0
+
+# Async HTTP client used to query public Telegram/Fragment pages
+httpx>=0.27,<1.0
+
+# ASGI server for local development (Vercel provides its own runtime)
+uvicorn[standard]>=0.30,<1.0
