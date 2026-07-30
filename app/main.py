@@ -1,28 +1,35 @@
-"""FastAPI application: routes, docs, error handling, optional security.
+"""FastAPI application: public website, API routes, docs, security.
 
-Endpoints
----------
-GET  /                       — API information and endpoint directory
+Website (developer product pages)
+---------------------------------
+GET  /                       — landing page (dark graphite + emerald UI)
+GET  /tester                 — interactive API playground
+GET  /docs                   — custom documentation (this project's own)
+GET  /swagger                — FastAPI Swagger UI (auto-generated)
+GET  /redoc                  — ReDoc (auto-generated)
+GET  /openapi.json           — OpenAPI schema
+GET  /static/*               — website assets
+
+Public API (versioned, rate limited: 25 requests/IP/minute)
+-----------------------------------------------------------
 GET  /api/health             — liveness probe
 GET  /api/v1/check           — single username check
 GET  /api/v1/report          — detailed single username report
-POST /api/v1/check/bulk      — concurrent bulk check (bounded)
+POST /api/v1/check/bulk      — bulk check (max 15 usernames, bounded)
 
-Security hooks (enabled via environment variables, disabled by default):
-``API_KEYS``                    require an X-API-Key header on data endpoints
-``RATE_LIMIT_ENABLED``          tiny in-memory per-client rate limiter
+Security hooks (environment driven): API keys via ``API_KEYS`` (off by
+default); rate limiting is ON by default for ``/api/*`` — see app/ratelimit.py.
 """
 
 from __future__ import annotations
 
 import logging
-import time
-from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .checker import UsernameChecker
@@ -37,9 +44,10 @@ from .models import (
     ErrorResponse,
     HealthResponse,
     ReportResponse,
-    RootResponse,
     utc_now_iso,
 )
+from .ratelimit import limiter
+from .web import STATIC_DIR, render_page
 
 logging.basicConfig(level=getattr(logging, "INFO"))
 logger = logging.getLogger("tg_username_api")
@@ -70,9 +78,13 @@ app = FastAPI(
         "username is reported `available` only when every public source agrees; ambiguous or failed "
         "checks always return `unknown`. No Telegram account, bot token, wallet or Fragment login is "
         "required — only public web pages are read.\n\n"
-        "Only publicly visible information is returned. Nothing is estimated or fabricated."
+        "Rate limits: 25 requests per IP per minute on `/api/*` (bulk: max 15 usernames). "
+        "Custom documentation lives at `/docs`; this Swagger UI lives at `/swagger`."
     ),
     lifespan=lifespan,
+    docs_url="/swagger",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 
 
@@ -102,30 +114,30 @@ def _http_error(status_code: int, code: ErrorCode, message: str) -> _ApiHttpErro
 
 
 # ---------------------------------------------------------------------------
-# optional lightweight rate limiter (in-memory, per instance)
+# public API rate limiting (25 req/IP/min on /api/*, website exempt)
 # ---------------------------------------------------------------------------
-
-_RATE_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
 
 
 @app.middleware("http")
-async def optional_rate_limit(request: Request, call_next):
-    if settings.rate_limit_enabled and request.url.path.startswith("/api/v1/"):
-        client = request.client.host if request.client else "unknown"
-        now = time.monotonic()
-        window = 60.0
-        limit = settings.rate_limit_requests_per_minute
-        bucket = _RATE_BUCKETS[client]
-        while bucket and now - bucket[0] > window:
-            bucket.popleft()
-        if len(bucket) >= limit:
-            return JSONResponse(
-                status_code=429,
-                content=ErrorResponse(error=ErrorInfo(code=ErrorCode.RATE_LIMITED, message="rate limit exceeded; slow down and retry later")).model_dump(mode="json"),
-                headers={"Retry-After": "30"},
-            )
-        bucket.append(now)
-    return await call_next(request)
+async def api_rate_limit(request: Request, call_next):
+    path = request.url.path
+    if not limiter.enabled or not limiter.applies_to(path):
+        return await call_next(request)
+
+    outcome = limiter.check(request)
+    if not outcome.allowed:
+        return JSONResponse(
+            status_code=429,
+            content=ErrorResponse(
+                error=ErrorInfo(code=ErrorCode.RATE_LIMIT_EXCEEDED, message="Rate limit exceeded. Try again shortly.")
+            ).model_dump(mode="json"),
+            headers={"Retry-After": str(outcome.retry_after), **limiter.headers(outcome)},
+        )
+
+    response = await call_next(request)
+    for name, value in limiter.headers(outcome).items():
+        response.headers[name] = value
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -178,38 +190,28 @@ USERNAME_QUERY = Query(
 
 
 # ---------------------------------------------------------------------------
-# routes
+# website routes (excluded from the OpenAPI schema; not rate limited)
 # ---------------------------------------------------------------------------
 
 
-@app.get(
-    "/",
-    response_model=RootResponse,
-    tags=["meta"],
-    summary="API information and endpoint directory",
-)
-async def root() -> RootResponse:
-    return RootResponse(
-        name="Telegram Username Intelligence API",
-        version=__version__,
-        description=(
-            "Determines the public status of Telegram usernames using only public Telegram (t.me) "
-            "and Fragment pages. Conservative verdicts: ambiguous evidence always yields 'unknown'."
-        ),
-        documentation={"swagger": "/docs", "redoc": "/redoc", "openapi": "/openapi.json"},
-        endpoints=[
-            {"method": "GET", "path": "/api/health", "description": "Liveness probe"},
-            {"method": "GET", "path": "/api/v1/check?username=durov", "description": "Single username check"},
-            {"method": "GET", "path": "/api/v1/report?username=durov", "description": "Detailed username report"},
-            {"method": "POST", "path": "/api/v1/check/bulk", "description": "Bulk check (JSON body: {\"usernames\": [...]})"},
-        ],
-        notes=[
-            "statuses: taken | fragment_collectible | available | invalid | unknown",
-            "'available' is only returned when Telegram clearly does not resolve the handle AND Fragment has no listing for it.",
-            "network failures, rate limits and unrecognized upstream responses never produce 'available'.",
-            "no Telegram account, bot token, TON wallet or Fragment login is used — only public pages.",
-        ],
-    )
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def website_home() -> HTMLResponse:
+    return HTMLResponse(render_page("home", "TG Username API — Telegram usernames. One API.", "home"))
+
+
+@app.get("/tester", response_class=HTMLResponse, include_in_schema=False)
+async def website_tester() -> HTMLResponse:
+    return HTMLResponse(render_page("tester", "API Tester — TG Username API", "tester"))
+
+
+@app.get("/docs", response_class=HTMLResponse, include_in_schema=False)
+async def website_docs() -> HTMLResponse:
+    return HTMLResponse(render_page("docs", "Documentation — TG Username API", "docs"))
+
+
+# ---------------------------------------------------------------------------
+# public API routes
+# ---------------------------------------------------------------------------
 
 
 @app.get(
@@ -266,10 +268,10 @@ async def report_username(
     tags=["checks"],
     summary="Check several usernames concurrently",
     description=(
-        f"Accepts up to **{settings.bulk_max_usernames}** usernames per request. Checks run "
-        "concurrently with bounded concurrency towards Telegram and Fragment — the API never fires "
-        "hundreds of simultaneous upstream requests. Input order is preserved in the response; "
-        "duplicates share a single upstream lookup."
+        f"Accepts up to **{settings.bulk_max_usernames}** usernames per request (enforced "
+        "server-side). Checks run concurrently with bounded concurrency towards Telegram and "
+        "Fragment — the API never fires hundreds of simultaneous upstream requests. Input order "
+        "is preserved; duplicates share a single upstream lookup."
     ),
 )
 async def check_bulk(
@@ -284,6 +286,10 @@ async def check_bulk(
             f"too many usernames: {len(payload.usernames)} provided, maximum is {settings.bulk_max_usernames} per request",
         )
     return await get_checker(request).check_bulk(payload)
+
+
+# Static assets for the website (mounted last; explicit routes win).
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 # Keep the module import-time side-effect free for serverless reuse.

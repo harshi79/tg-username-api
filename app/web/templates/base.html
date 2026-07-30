@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="TG Username API — conservative public-presence intelligence for Telegram usernames: t.me resolution, Fragment collectible state, marketplace status and public prices.">
+  <title>{{ title }}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d1112'/%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='none' stroke='%23223035'/%3E%3Ctext x='16' y='21.5' font-family='monospace' font-size='14' fill='%2314b8a6' text-anchor='middle'%3E@%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/" aria-label="TG Username API home">
+        <span class="brand-mark">@</span>
+        <span class="brand-text">TG&nbsp;Username&nbsp;API</span>
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a href="/"{{ active_home }}>Home</a>
+        <a href="/tester"{{ active_tester }}>API Tester</a>
+        <a href="/docs"{{ active_docs }}>Documentation</a>
+        <a href="/swagger"{{ active_openapi }}>OpenAPI</a>
+        <a href="/api/health"{{ active_health }}>Health</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="container">
+    {{ content }}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <span class="footer-name">TG Username API</span>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="https://github.com/harshi79/tg-username-api" rel="noopener noreferrer" target="_blank">GitHub</a>
+        <a href="/docs">Docs</a>
+        <a href="/swagger">OpenAPI</a>
+        <a href="/api/health" class="footer-status"><span class="status-dot" data-health-dot aria-hidden="true"></span>API status</a>
+      </nav>
+      <span class="footer-note">Public data only. Conservative by design.</span>
+    </div>
+  </footer>
+
+  <script src="/static/site.js" defer></script>
+</body>
+</html>

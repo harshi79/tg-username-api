@@ -146,3 +146,16 @@ def checker(fake_http: FakeHttpManager):
     from app.checker import UsernameChecker
 
     return UsernameChecker(fake_http)  # type: ignore[arg-type]
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Isolate every test from the (default-on) in-memory API rate limiter."""
+    from app.ratelimit import limiter
+
+    backend = limiter.backend
+    if hasattr(backend, "clear"):
+        backend.clear()
+    yield
+    if hasattr(backend, "clear"):
+        backend.clear()

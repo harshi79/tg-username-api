@@ -1,0 +1,147 @@
+<section class="hero">
+  <span class="hero-eyebrow">public-presence intelligence</span>
+  <h1>Telegram usernames. <span class="accent">One API.</span></h1>
+  <p class="hero-sub">
+    TG Username API combines public Telegram (<span class="inline-code">t.me</span>) resolution
+    signals with public Fragment collectible data — marketplace state, auction status and TON
+    prices when publicly displayed. Conservative by design: ambiguous evidence always returns
+    <span class="badge badge-unknown">unknown</span>, never a guess.
+  </p>
+  <div class="hero-cta">
+    <a class="btn btn-primary" href="/tester">Try API</a>
+    <a class="btn" href="/docs">Read Docs</a>
+  </div>
+</section>
+
+<section class="section">
+  <div class="field-label">API base URL</div>
+  <div class="base-url-box">
+    <code data-base-url>https://host/api/v1</code>
+    <button class="copy-btn" data-copy=".base-url-box code" aria-label="Copy API base URL">Copy</button>
+  </div>
+
+  <div class="codeblock">
+    <div class="code-label">
+      <span>GET&nbsp; <span data-base-url-suffix="/check?username=durov">/api/v1/check?username=durov</span></span>
+      <button class="copy-btn" data-copy="#home-sample-req">Copy</button>
+    </div>
+    <pre id="home-sample-req">GET /api/v1/check?username=durov
+Accept: application/json</pre>
+  </div>
+
+  <div class="codeblock">
+    <div class="code-label">
+      <span>sample response — live values vary</span>
+      <button class="copy-btn" data-copy="#home-sample-res">Copy</button>
+    </div>
+    <pre id="home-sample-res">{
+  "success": true,
+  "username": "durov",
+  "validation": { "valid": true, "input": "durov", "normalized": "durov", "reason": null },
+  "telegram": {
+    "checked": true,
+    "exists": true,
+    "entity_type": "channel",
+    "page_kind": "rich_profile_page",
+    "display_name": "Pavel Durov",
+    "public_url": "https://t.me/durov",
+    "http_status": 200,
+    "final_url": "https://t.me/durov",
+    "evidence": ["page title: 'Telegram: View @durov'", "public counters: 11 419 432  subscribers"],
+    "error": null
+  },
+  "fragment": {
+    "checked": false,
+    "found": null,
+    "collectible": null,
+    "status": null,
+    "price": null,
+    "auction": null,
+    "url": null,
+    "evidence": ["not queried: the username already resolves on Telegram"],
+    "error": null
+  },
+  "result": {
+    "status": "taken",
+    "explanation": "@durov currently resolves on Telegram (public channel page)."
+  },
+  "cached": false,
+  "checked_at": "2026-07-30T09:45:19Z"
+}</pre>
+  </div>
+</section>
+
+<section class="section">
+  <div class="grid grid-4">
+    <div class="card">
+      <h3><span class="card-icon">↗</span>Telegram Check</h3>
+      <p>Public resolution on <span class="inline-code">t.me</span> with entity typing —
+      channel, group, bot or bare user page — plus redirect, 404 and rate-limit handling.</p>
+    </div>
+    <div class="card">
+      <h3><span class="card-icon">◇</span>Fragment Intelligence</h3>
+      <p>Collectible state from Fragment's public pages: taken, on auction, for sale, sold —
+      with publicly displayed TON prices and bids, column-aligned from source tables.</p>
+    </div>
+    <div class="card">
+      <h3><span class="card-icon">≡</span>Bulk Check</h3>
+      <p>Up to 15 usernames per request, checked concurrently with bounded upstream
+      concurrency and in-flight deduplication. Input order preserved.</p>
+    </div>
+    <div class="card">
+      <h3><span class="card-icon">⚙</span>Detailed Reports</h3>
+      <p>Objective username characteristics (length, digits, underscores, repetition),
+      public signals, and a clearly-labelled heuristic — never a market valuation.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <h2>Status model</h2>
+  <p class="section-lead">
+    Every check ends in exactly one verdict. The API only reports
+    <span class="badge badge-available">available</span> when Telegram clearly does not resolve the
+    handle <em>and</em> Fragment has no listing. Anything ambiguous becomes
+    <span class="badge badge-unknown">unknown</span> — including timeouts, rate limits and
+    redesigned upstream pages.
+  </p>
+  <div class="table-wrap" style="margin-top:16px">
+    <table class="data">
+      <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge badge-taken">taken</span></td>
+            <td>Currently resolves on Telegram (channel / group / bot page, or a Fragment "claimed" report consistent with a bare user page).</td></tr>
+        <tr><td><span class="badge badge-fragment_collectible">fragment_collectible</span></td>
+            <td>Not publicly resolving, but Fragment tracks it as a collectible — auction, sale, sold or held. Not freely claimable.</td></tr>
+        <tr><td><span class="badge badge-available">available</span></td>
+            <td>Clean negative on Telegram (404 / telegram.org redirect) <strong>and</strong> no Fragment page, with no upstream failures.</td></tr>
+        <tr><td><span class="badge badge-invalid">invalid</span></td>
+            <td>Failed local validation. No external request was made.</td></tr>
+        <tr><td><span class="badge badge-unknown">unknown</span></td>
+            <td>The API could not safely determine the state. Never assume availability from this status.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <h2>Rate limits</h2>
+  <p class="section-lead">
+    <strong>25 requests per IP per minute</strong> on <span class="inline-code">/api/*</span>, with
+    <span class="inline-code">X-RateLimit-Limit</span>, <span class="inline-code">X-RateLimit-Remaining</span>
+    and <span class="inline-code">X-RateLimit-Reset</span> response headers. Bulk requests accept a
+    maximum of <strong>15 usernames</strong> and count as one API request. This website's pages are
+    not rate limited. On serverless platforms the in-memory limiter is best-effort per instance —
+    see the <a href="/docs#rate-limits">docs</a>.
+  </p>
+</section>
+
+<section class="section">
+  <h2>Get started</h2>
+  <p class="section-lead">Check your first username right now — no signup, no credentials.</p>
+  <div class="hero-cta" style="margin-top:14px">
+    <a class="btn btn-primary" href="/tester">Try API</a>
+    <a class="btn" href="/docs">Read Docs</a>
+    <a class="btn" href="/swagger">OpenAPI</a>
+  </div>
+</section>

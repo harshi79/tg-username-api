@@ -78,7 +78,8 @@ class Settings:
     bulk_concurrency: int = field(default_factory=lambda: _int_env("BULK_CONCURRENCY", 5, 1, 25))
 
     # --- Bulk limits ---------------------------------------------------------
-    bulk_max_usernames: int = field(default_factory=lambda: _int_env("BULK_MAX_USERNAMES", 25, 1, 100))
+    # Hard maximum of usernames per bulk request (public API contract).
+    bulk_max_usernames: int = 15
 
     # --- Cache ----------------------------------------------------------------
     cache_ttl_seconds: int = field(default_factory=lambda: _int_env("CACHE_TTL_SECONDS", 300, 0, 86400))
@@ -93,10 +94,23 @@ class Settings:
     )
     api_key_header: str = field(default_factory=lambda: os.getenv("API_KEY_HEADER", "X-API-Key"))
 
-    # Optional very lightweight in-memory rate limiter (disabled by default).
-    rate_limit_enabled: bool = field(default_factory=lambda: _bool_env("RATE_LIMIT_ENABLED", False))
+    # --- Public API rate limiting ---------------------------------------------
+    # Production default: 25 requests per client IP per fixed 60-second window,
+    # applied to /api/* routes only (website pages and static assets are exempt).
+    # In-memory = best-effort per serverless instance; see app/ratelimit.py.
+    rate_limit_enabled: bool = field(default_factory=lambda: _bool_env("RATE_LIMIT_ENABLED", True))
     rate_limit_requests_per_minute: int = field(
-        default_factory=lambda: _int_env("RATE_LIMIT_REQUESTS_PER_MINUTE", 60, 1, 100000)
+        default_factory=lambda: _int_env("RATE_LIMIT_REQUESTS_PER_MINUTE", 25, 1, 100000)
+    )
+    rate_limit_window_seconds: int = field(
+        default_factory=lambda: _int_env("RATE_LIMIT_WINDOW_SECONDS", 60, 5, 3600)
+    )
+    # When to trust proxy forwarding headers for the client IP:
+    #   "auto"  -> only inside the Vercel runtime (VERCEL env var present)
+    #   "true"  -> always (your own trusted reverse proxy terminates TLS)
+    #   "false" -> never (direct/local deployments: use the socket peer IP)
+    trust_proxy_headers: str = field(
+        default_factory=lambda: os.getenv("TRUST_PROXY_HEADERS", "auto").strip().lower()
     )
 
     # --- Misc ------------------------------------------------------------------
@@ -105,6 +119,16 @@ class Settings:
     @property
     def auth_enabled(self) -> bool:
         return len(self.api_keys) > 0
+
+    @property
+    def on_vercel(self) -> bool:
+        return bool(os.getenv("VERCEL"))
+
+    @property
+    def trust_proxy(self) -> bool:
+        if self.trust_proxy_headers == "auto":
+            return self.on_vercel
+        return self.trust_proxy_headers in {"1", "true", "yes", "on"}
 
 
 settings = Settings()

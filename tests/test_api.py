@@ -17,13 +17,21 @@ def client(fake_http):
         yield test_client, fake_http
 
 
-def test_root(client) -> None:
+def test_bulk_max_is_15_and_server_enforced(client) -> None:
     test_client, _ = client
-    body = test_client.get("/").json()
-    assert body["name"].startswith("Telegram Username")
-    assert any(e["path"].startswith("/api/v1/check") for e in body["endpoints"])
-    response = test_client.get("/")
+    ok_names = ["durov", "botfather", "durovschat"] * 5  # exactly 15 entries
+    response = test_client.post("/api/v1/check/bulk", json={"usernames": ok_names})
     assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["total"] == 15
+
+    response = test_client.post("/api/v1/check/bulk", json={"usernames": ok_names + ["support"]})
+    assert response.status_code == 400
+    body = response.json()
+    assert body["success"] is False
+    assert body["error"]["code"] == ErrorCode.PAYLOAD_TOO_LARGE.value
+    assert "15" in body["error"]["message"]
 
 
 def test_health(client) -> None:
@@ -150,6 +158,13 @@ def test_bulk_too_many(client) -> None:
     assert body["error"]["code"] == ErrorCode.PAYLOAD_TOO_LARGE.value
 
 
+def test_bulk_exactly_16_rejected(client) -> None:
+    test_client, _ = client
+    response = test_client.post("/api/v1/check/bulk", json={"usernames": [f"user{i:04d}x" for i in range(16)]})
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == ErrorCode.PAYLOAD_TOO_LARGE.value
+
+
 def test_bulk_empty_payload_validation_error(client) -> None:
     test_client, _ = client
     response = test_client.post("/api/v1/check/bulk", json={"usernames": []})
@@ -173,7 +188,12 @@ def test_openapi_documentation_available(client) -> None:
     spec = test_client.get("/openapi.json").json()
     assert "/api/v1/check" in spec["paths"]
     assert "/api/v1/check/bulk" in spec["paths"]
+    assert "/api/v1/report" in spec["paths"]
+    assert "/api/health" in spec["paths"]
     assert spec["info"]["title"] == "Telegram Username Intelligence API"
+    # website pages must NOT leak into the API schema
+    for website_path in ["/", "/tester", "/docs"]:
+        assert website_path not in spec["paths"]
 
 
 def test_never_fabricates_private_profile_info(client) -> None:

@@ -63,6 +63,7 @@ class ErrorCode(str, Enum):
     NETWORK_ERROR = "network_error"
     UNAUTHORIZED = "unauthorized"
     RATE_LIMITED = "rate_limited"
+    RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
     PAYLOAD_TOO_LARGE = "payload_too_large"
     VALIDATION_ERROR = "validation_error"
     INTERNAL_ERROR = "internal_error"
